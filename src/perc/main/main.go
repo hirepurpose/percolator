@@ -35,6 +35,7 @@ func main() {
   fInflux       := cmdline.String   ("influxdb",      os.Getenv("HP_METRICS_INFLUXDB"),                                                       "The InfluxDB metrics reporting backend, specified as: 'host[:port]'.")
   fEnviron      := cmdline.String   ("environ",       coalesce(os.Getenv("HP_ENVIRON"), os.Getenv("ENVIRON"), "devel"),                       "The environment in which the service is running (devel, staging, production).")
   fSentry       := cmdline.String   ("sentry",        os.Getenv("HP_SENTRY"),                                                                 "Report errors to Sentry. The Sentry authentication DSN should be provided as an argument.")
+  fCacheTimeout := cmdline.Duration ("cache:timeout", strToDur(coalesce(os.Getenv("HP_CACHE_TIMEOUT"), "5m")),                                "The timeout after which cached service providers should be expired.")
   fIOTimeout    := cmdline.Duration ("timeout",       strToDur(coalesce(os.Getenv("HP_TIMEOUT"), "0")),                                       "Specify both the read and write timeouts for client connections at once. This flag overrides -timeout:read and -timeout:write.")
   fReadTimeout  := cmdline.Duration ("timeout:read",  strToDur(coalesce(os.Getenv("HP_TIMEOUT_READ"), "5s")),                                 "The read timeout for client connections.")
   fWriteTimeout := cmdline.Duration ("timeout:write", strToDur(coalesce(os.Getenv("HP_TIMEOUT_WRITE"), "5s")),                                "The write timeout for client connections.")
@@ -104,15 +105,21 @@ func main() {
     panic(err)
   }
   
-  var discovery discovery.Service
+  var disc discovery.Service
   switch provider.Type {
     case "etcd":
-      discovery, err = etcd.New(*fDomain, provider.Zones)
+      disc, err = etcd.New(*fDomain, provider.Zones)
     default:
       err = fmt.Errorf("Unsupported discovery provider type: %v", provider.Type)
   }
   if err != nil {
     panic(err)
+  }
+  
+  if *fCacheTimeout > 0 {
+    if disc != nil {
+      disc = discovery.NewCache(disc, *fCacheTimeout)
+    }
   }
   
   var routes []*route.Route
@@ -121,7 +128,7 @@ func main() {
     if err != nil {
       panic(err)
     }
-    if r.Service && discovery == nil {
+    if r.Service && disc == nil {
       panic(fmt.Errorf("No discovery service is defined but a service is used in route: %v", e))
     }
     routes = append(routes, r)
@@ -156,7 +163,7 @@ func main() {
   svc := service.New(service.Config{
     Name:         "percolator",
     Instance:     instance,
-    Discovery:    discovery,
+    Discovery:    disc,
     Routes:       routes,
     ZeroCopy:     *fOptimize,
     ReadTimeout:  *fReadTimeout,

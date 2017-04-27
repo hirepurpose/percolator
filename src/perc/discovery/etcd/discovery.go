@@ -150,7 +150,7 @@ func (s *Service) ServiceProviders(n int, svc string) ([]string, error) {
   outer:
   for _, c := range s.clients {
     cxt, cancel := context.WithTimeout(context.Background(), timeout)
-    rsp, err := c.Get(cxt, keyPath(discPrefix, svc))
+    rsp, err := c.Get(cxt, keyPath(discPrefix, svc), clientv3.WithFromKey())
     defer cancel()
     if err != nil {
       etcdLookupErrorRate.Mark(1)

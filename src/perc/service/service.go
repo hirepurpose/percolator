@@ -101,13 +101,14 @@ func (s *Service) Run() error {
  * Handle a request for a particular route
  */
 func (s *Service) handle(r *route.Route, c *net.TCPConn) {
+  var b *net.TCPConn
+  var err error
+  
   if debug.VERBOSE {
     alt.Debugf("%v: Accepted connection", c.RemoteAddr())
   }
   
-  var b *net.TCPConn
   defer func() {
-    var err error
     if c != nil {
       err = c.Close()
       if err != nil {
@@ -124,7 +125,10 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   
   var addr string
   if r.Service {
-    var err error
+    if s.discovery == nil {
+      alt.Errorf("service: Discovery not available")
+      return
+    }
     addr, err = s.discovery.ServiceProvider(r.Backends[0])
     if err != nil {
       alt.Errorf("service: Could not discover service: %v", err)
@@ -132,6 +136,10 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     }
   }else{
     addr = r.NextBackend()
+  }
+  
+  if debug.VERBOSE {
+    alt.Debugf("%v: Proxying to backend: %v", c.RemoteAddr(), addr)
   }
   
   p, err := net.Dial("tcp", addr)
