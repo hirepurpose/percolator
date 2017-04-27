@@ -11,7 +11,6 @@ import (
   "perc/route"
   "perc/service"
   "perc/discovery"
-  "perc/discovery/etcd"
 )
 
 import (
@@ -100,18 +99,7 @@ func main() {
     go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, time.Second * 5, fmt.Sprintf("http://%s", *fInflux), "hirepurpose", "", "", map[string]string{"environ": *fEnviron, "host": hostname, "instance": instance})
   }
   
-  provider, err := discovery.ParseProvider(*fDiscovery)
-  if err != nil {
-    panic(err)
-  }
-  
-  var disc discovery.Service
-  switch provider.Type {
-    case "etcd":
-      disc, err = etcd.New(*fDomain, provider.Zones)
-    default:
-      err = fmt.Errorf("Unsupported discovery provider type: %v", provider.Type)
-  }
+  disc, err := discovery.New(*fDomain, *fDiscovery)
   if err != nil {
     panic(err)
   }

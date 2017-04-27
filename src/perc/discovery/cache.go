@@ -4,6 +4,7 @@ import (
   "time"
   "sync"
   "strings"
+  "perc/discovery/provider"
 )
 
 import (
@@ -82,7 +83,7 @@ func (c *Cache) ServiceProvider(svc string) (string, error) {
     return "", err
   }
   if len(r) < 1 {
-    return "", ErrNoProviders
+    return "", provider.ErrNoProviders
   }
   return r[0], nil
 }

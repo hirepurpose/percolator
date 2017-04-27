@@ -7,7 +7,7 @@ import (
   "path"
   "strings"
   "context"
-  "perc/discovery"
+  "perc/discovery/provider"
 )
 
 import (
@@ -18,11 +18,11 @@ import (
 )
 
 const (
-  discPrefix = "/disc/perc"
+  KeyPrefix = "/disc/perc"
 )
 
 const (
-  timeout = time.Second * 5
+  timeout   = time.Second * 5
 )
 
 var (
@@ -44,18 +44,18 @@ func init() {
  * Etcd-backed discovery service
  */
 type Service struct {
-  zones   []discovery.Zone
+  zones   []provider.Zone
   clients []*clientv3.Client
 }
 
 /**
  * Create a new discovery service
  */
-func New(d string, z []discovery.Zone) (*Service, error) {
+func New(d string, z []provider.Zone) (*Service, error) {
   clients := make([]*clientv3.Client, 0)
   
   for _, e := range z {
-    c, err := clientForZone(d, e)
+    c, err := ClientForZone(d, e)
     if err != nil {
       alt.Errorf("etcd: Could not lookup discovery service: %v", err)
     }
@@ -74,7 +74,7 @@ func New(d string, z []discovery.Zone) (*Service, error) {
 /**
  * Create a client for the specified zone
  */
-func clientForZone(d string, z discovery.Zone) (*clientv3.Client, error) {
+func ClientForZone(d string, z provider.Zone) (*clientv3.Client, error) {
   
   q := z.String()
   if d != "" {
@@ -105,7 +105,7 @@ func clientForZone(d string, z discovery.Zone) (*clientv3.Client, error) {
 /**
  * Build a path for the provided keys
  */
-func keyPath(k ...string) string {
+func KeyPath(k ...string) string {
   var p string
   for _, e := range k {
     if p != "" {
@@ -126,7 +126,7 @@ func (s *Service) ServiceProvider(svc string) (string, error) {
     return "", err
   }
   if len(p) < 1 {
-    return "", discovery.ErrNoProviders
+    return "", provider.ErrNoProviders
   }
   return p[0], nil
 }
@@ -144,13 +144,13 @@ func (s *Service) ServiceProviders(n int, svc string) ([]string, error) {
   var r []string
   if len(s.clients) < 1 {
     etcdLookupErrorRate.Mark(1)
-    return nil, discovery.ErrNoDiscovery
+    return nil, provider.ErrNoDiscovery
   }
   
   outer:
   for _, c := range s.clients {
     cxt, cancel := context.WithTimeout(context.Background(), timeout)
-    rsp, err := c.Get(cxt, keyPath(discPrefix, svc), clientv3.WithFromKey())
+    rsp, err := c.Get(cxt, KeyPath(KeyPrefix, svc), clientv3.WithFromKey())
     defer cancel()
     if err != nil {
       etcdLookupErrorRate.Mark(1)
@@ -166,7 +166,7 @@ func (s *Service) ServiceProviders(n int, svc string) ([]string, error) {
   
   if len(r) < 1 {
     etcdLookupErrorRate.Mark(1)
-    return nil, discovery.ErrNoProviders
+    return nil, provider.ErrNoProviders
   }
   return r, nil
 }
