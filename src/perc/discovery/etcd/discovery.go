@@ -13,6 +13,7 @@ import (
 import (
   "github.com/bww/go-alert"
   "github.com/bww/go-util/debug"
+  "github.com/rcrowley/go-metrics"
   "github.com/coreos/etcd/clientv3"
 )
 
@@ -23,6 +24,21 @@ const (
 const (
   timeout = time.Second * 5
 )
+
+var (
+  etcdLookupRate metrics.Meter
+  etcdLookupErrorRate metrics.Meter
+  etcdLookupDuration metrics.Timer
+)
+
+func init() {
+  etcdLookupRate = metrics.NewMeter()
+  metrics.Register("percolator.etcd.lookup.rate", etcdLookupRate)
+  etcdLookupErrorRate = metrics.NewMeter()
+  metrics.Register("percolator.etcd.lookup.error.rate", etcdLookupErrorRate)
+  etcdLookupDuration = metrics.NewTimer()
+  metrics.Register("percolator.etcd.lookup.duration", etcdLookupDuration)
+}
 
 /**
  * Etcd-backed discovery service
@@ -102,24 +118,57 @@ func keyPath(k ...string) string {
 }
 
 /**
+ * Obtain the next service provider
+ */
+func (s *Service) ServiceProvider(svc string) (string, error) {
+  p, err := s.ServiceProviders(1, svc)
+  if err != nil {
+    return "", err
+  }
+  if len(p) < 1 {
+    return "", discovery.ErrNoProviders
+  }
+  return p[0], nil
+}
+
+/**
  * Lookup a service
  */
-func (s *Service) AddressForService(n int, svc string) ([]string, error) {
+func (s *Service) ServiceProviders(n int, svc string) ([]string, error) {
+  etcdLookupRate.Mark(1)
+  start := time.Now()
+  defer func(){
+    etcdLookupDuration.Update(time.Since(start))
+  }()
+  
+  var r []string
+  if len(s.clients) < 1 {
+    etcdLookupErrorRate.Mark(1)
+    return nil, discovery.ErrNoDiscovery
+  }
+  
+  outer:
   for _, c := range s.clients {
-    
     cxt, cancel := context.WithTimeout(context.Background(), timeout)
     rsp, err := c.Get(cxt, keyPath(discPrefix, svc))
     defer cancel()
     if err != nil {
+      etcdLookupErrorRate.Mark(1)
       return nil, err
     }
-    
     for _, e := range rsp.Kvs {
-      fmt.Println("YO", string(e.Value))
+      r = append(r, string(e.Value))
+      if len(r) > n {
+        break outer
+      }
     }
-    
   }
-  return nil, discovery.ErrNoDiscovery
+  
+  if len(r) < 1 {
+    etcdLookupErrorRate.Mark(1)
+    return nil, discovery.ErrNoProviders
+  }
+  return r, nil
 }
 
 /**

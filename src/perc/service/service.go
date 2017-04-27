@@ -105,10 +105,31 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     alt.Debugf("%v: Accepted connection", c.RemoteAddr())
   }
   
+  var b *net.TCPConn
+  defer func() {
+    var err error
+    if c != nil {
+      err = c.Close()
+      if err != nil {
+        alt.Errorf("service: %v -> %v: Could not close client: %v\n", c.RemoteAddr(), b.RemoteAddr(), err)
+      }
+    }
+    if b != nil {
+      err = b.Close()
+      if err != nil {
+        alt.Errorf("service: %v -> %v: Could not close backend: %v\n", err)
+      }
+    }
+  }()
+  
   var addr string
   if r.Service {
-    alt.Errorf("service: Service discovery is not supported")
-    return
+    var err error
+    addr, err = s.discovery.ServiceProvider(r.Backends[0])
+    if err != nil {
+      alt.Errorf("service: Could not discover service: %v", err)
+      return
+    }
   }else{
     addr = r.NextBackend()
   }
@@ -119,7 +140,7 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     return
   }
   
-  b := p.(*net.TCPConn)
+  b = p.(*net.TCPConn)
   errs := make(chan error, 2)
   
   if s.optimize {
@@ -133,16 +154,6 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   err = <- errs
   if err != io.EOF {
     alt.Errorf("service: %v -> %v: Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), err)
-  }
-  
-  err = c.Close()
-  if err != nil {
-    alt.Errorf("service: %v -> %v: Could not close client: %v\n", c.RemoteAddr(), b.RemoteAddr(), err)
-  }
-  
-  err = b.Close()
-  if err != nil {
-    alt.Errorf("service: %v -> %v: Could not close backend: %v\n", err)
   }
   
   if debug.VERBOSE {
