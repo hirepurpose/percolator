@@ -7,6 +7,7 @@ import (
   "time"
   "strings"
   "crypto/sha1"
+  "runtime/pprof"
   "perc/route"
   "perc/service"
   "perc/discovery"
@@ -41,6 +42,7 @@ func main() {
   fDebug        := cmdline.Bool     ("debug",         strToBool(os.Getenv("HP_DEBUG")),                                                       "Enable debugging mode.")
   fStack        := cmdline.Bool     ("debug:stack",   strToBool(os.Getenv("HP_DEBUG_STACK")),                                                 "Enable stack debugging mode.")
   fVerbose      := cmdline.Bool     ("verbose",       strToBool(os.Getenv("HP_VERBOSE")),                                                     "Enable verbose debugging mode.")
+  fProfileCPU   := cmdline.String   ("profile:cpu",   os.Getenv("HP_PROFILE_CPU"),                                                            "Enable CPU profiling and write data to the provided path.")
   cmdline.Var    (&proxyRoutes,      "route",                                                                                                 "Add a proxy route for the specified service as: 'listen_port=(host:port,...|service)'. Use this flag repeatedly for multiple routes.")
   cmdline.Parse(os.Args[1:])
   
@@ -102,8 +104,6 @@ func main() {
     panic(err)
   }
   
-  fmt.Println(provider)
-  
   var discovery discovery.Service
   switch provider.Type {
     case "etcd":
@@ -121,9 +121,9 @@ func main() {
     if err != nil {
       panic(err)
     }
-    // if r.Service && discovery == nil {
-    //   panic(fmt.Errorf("No discovery service is defined but a service is used in route: %v", e))
-    // }
+    if r.Service && discovery == nil {
+      panic(fmt.Errorf("No discovery service is defined but a service is used in route: %v", e))
+    }
     routes = append(routes, r)
   }
   
@@ -138,6 +138,19 @@ func main() {
   if *fIOTimeout > 0 {
     *fReadTimeout = *fIOTimeout
     *fWriteTimeout = *fIOTimeout
+  }
+  
+  if *fProfileCPU != "" {
+    f, err := os.Create(*fProfileCPU)
+    if err != nil {
+      panic(fmt.Errorf("Could not create CPU profile: ", err))
+    }
+    err = pprof.StartCPUProfile(f)
+    if err != nil {
+      panic(fmt.Errorf("Could not start CPU profile: ", err))
+    }
+    fmt.Printf("-----> Profiling CPU; logging to: %v\n", *fProfileCPU)
+    defer pprof.StopCPUProfile()
   }
   
   svc := service.New(service.Config{

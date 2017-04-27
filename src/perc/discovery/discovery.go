@@ -5,13 +5,16 @@ import (
   "strings"
 )
 
-var ErrMalformedProvider = fmt.Errorf("Malformed provider")
+var (
+  ErrMalformedProvider  = fmt.Errorf("Malformed provider")
+  ErrNoDiscovery        = fmt.Errorf("No discovery service available")
+)
 
 /**
  * A discovery service
  */
 type Service interface {
-  // AddressForService(int, string)([]string, error)
+  AddressForService(int, string)([]string, error)
 }
 
 /**
