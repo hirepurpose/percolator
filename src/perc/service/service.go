@@ -171,6 +171,12 @@ func (s *Service) copyGeneric(dst, src *net.TCPConn, xfer metrics.Meter, errs ch
   for {
     nr, er := src.Read(buf)
     xfer.Mark(int64(nr)) // read side is instrumented
+    if s.rto > 0 { // read deadline on src only
+      src.SetReadDeadline(time.Now().Add(s.rto))
+    }
+    if s.wto > 0 { // write deadline on src only
+      src.SetWriteDeadline(time.Now().Add(s.wto))
+    }
     if nr > 0 {
       nw, ew := dst.Write(buf[0:nr])
       if nw > 0 {
