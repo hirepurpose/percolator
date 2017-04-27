@@ -10,6 +10,7 @@ import (
   "perc/route"
   "perc/service"
   "perc/discovery"
+  "perc/discovery/etcd"
 )
 
 import (
@@ -28,7 +29,8 @@ func main() {
   var proxyRoutes flagList
   
   cmdline       := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-  fDiscovery    := cmdline.String   ("discovery",     coalesce(os.Getenv("HP_DISCOVERY_SERVICE"), "localohst:8804"),                          "The discovery service with which to lookup backend service addresses.")
+  fDomain       := cmdline.String   ("domain",        coalesce(os.Getenv("HP_DISCOVERY_DOMAIN"), "disc.api.hirepurpose.com"),                 "The domain to use for service discovery.")
+  fDiscovery    := cmdline.String   ("discovery",     coalesce(os.Getenv("HP_DISCOVERY_SERVICE"), "etcd://us-east-1"),                        "The discovery service used for service lookup, specified as 'service://[az.]region[,..,[azN.]regionN]'. Regions should be provided in descending order of preference.")
   fInflux       := cmdline.String   ("influxdb",      os.Getenv("HP_METRICS_INFLUXDB"),                                                       "The InfluxDB metrics reporting backend, specified as: 'host[:port]'.")
   fEnviron      := cmdline.String   ("environ",       coalesce(os.Getenv("HP_ENVIRON"), os.Getenv("ENVIRON"), "devel"),                       "The environment in which the service is running (devel, staging, production).")
   fSentry       := cmdline.String   ("sentry",        os.Getenv("HP_SENTRY"),                                                                 "Report errors to Sentry. The Sentry authentication DSN should be provided as an argument.")
@@ -95,9 +97,22 @@ func main() {
     go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, time.Second * 5, fmt.Sprintf("http://%s", *fInflux), "hirepurpose", "", "", map[string]string{"environ": *fEnviron, "host": hostname, "instance": instance})
   }
   
+  provider, err := discovery.ParseProvider(*fDiscovery)
+  if err != nil {
+    panic(err)
+  }
+  
+  fmt.Println(provider)
+  
   var discovery discovery.Service
-  if *fDiscovery != "" {
-    if discovery == nil {}
+  switch provider.Type {
+    case "etcd":
+      discovery, err = etcd.New(*fDomain, provider.Zones)
+    default:
+      err = fmt.Errorf("Unsupported discovery provider type: %v", provider.Type)
+  }
+  if err != nil {
+    panic(err)
   }
   
   var routes []*route.Route
@@ -106,9 +121,9 @@ func main() {
     if err != nil {
       panic(err)
     }
-    if r.Service && discovery == nil {
-      panic(fmt.Errorf("No discovery service is defined but a service is used in route: %v", e))
-    }
+    // if r.Service && discovery == nil {
+    //   panic(fmt.Errorf("No discovery service is defined but a service is used in route: %v", e))
+    // }
     routes = append(routes, r)
   }
   
