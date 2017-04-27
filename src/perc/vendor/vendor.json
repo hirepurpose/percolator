@@ -1,0 +1,70 @@
+{
+	"comment": "",
+	"ignore": "test appengine",
+	"package": [
+		{
+			"path": "bitbucket.org/madebymess/go-util",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "okMQjN9HIVun6NrdvH+EA04HtCI=",
+			"path": "github.com/bww/go-alert",
+			"revision": "08f5aa2b7efca865936efda690eb912003a4cf5d",
+			"revisionTime": "2016-11-03T17:28:12Z"
+		},
+		{
+			"checksumSHA1": "Y6hhtuGsSpRxUKnf6EldVyf08uQ=",
+			"path": "github.com/bww/go-alert/sentry",
+			"revision": "08f5aa2b7efca865936efda690eb912003a4cf5d",
+			"revisionTime": "2016-11-03T17:28:12Z"
+		},
+		{
+			"checksumSHA1": "fC3UgXC+PPaLVEqtAgC/S/4Khc8=",
+			"path": "github.com/bww/go-metrics-influxdb",
+			"revision": "8ffea4702ec9d592677237831125ba3421224839",
+			"revisionTime": "2016-12-12T19:34:39Z"
+		},
+		{
+			"checksumSHA1": "8MdHO6UjyOJp58Ewppsofz41doE=",
+			"path": "github.com/bww/go-util",
+			"revision": "782086f0d4d9e8c256110a65e35b69dd899f820d",
+			"revisionTime": "2017-04-26T19:22:03Z",
+			"tree": true
+		},
+		{
+			"checksumSHA1": "ucbcZH1zmkc70WHK+J4q+257Ma0=",
+			"path": "github.com/bww/raven-go/raven",
+			"revision": "2cf5124a7b8995b3a2deeeef184b67616b710cfb",
+			"revisionTime": "2015-11-09T23:20:55Z"
+		},
+		{
+			"checksumSHA1": "dqKs4gYvG1oR1K99VZ1SEN++KLs=",
+			"path": "github.com/influxdata/influxdb/client",
+			"revision": "fce183f21a24e7344f1479a9e81481d8c77bd65a",
+			"revisionTime": "2017-04-20T20:36:47Z"
+		},
+		{
+			"checksumSHA1": "XF3IYhDmE6ql3CBnYmhDcSCQMr8=",
+			"path": "github.com/influxdata/influxdb/models",
+			"revision": "fce183f21a24e7344f1479a9e81481d8c77bd65a",
+			"revisionTime": "2017-04-20T20:36:47Z"
+		},
+		{
+			"checksumSHA1": "H/J/qLqzUONXIecHHKtVZmxJZZA=",
+			"path": "github.com/influxdata/influxdb/pkg/escape",
+			"revision": "fce183f21a24e7344f1479a9e81481d8c77bd65a",
+			"revisionTime": "2017-04-20T20:36:47Z"
+		},
+		{
+			"checksumSHA1": "UfwH6L6mvyFHSX7vXhAZEwgus+A=",
+			"path": "github.com/rcrowley/go-metrics",
+			"revision": "1f30fe9094a513ce4c700b9a54458bbb0c96996c",
+			"revisionTime": "2016-11-28T21:05:44Z"
+		},
+		{
+			"path": "util/rand",
+			"revision": ""
+		}
+	],
+	"rootPath": "perc"
+}
