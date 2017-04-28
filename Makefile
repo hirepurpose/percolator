@@ -1,9 +1,11 @@
 
 # environment
-export ENVIRON ?= devel
+export PROJECT	:= $(shell cd $(PWD)/.. && pwd)
+export VENDOR		:= $(PROJECT)/vendor
+export ENVIRON 	?= devel
 
 # update the gopath
-GOPATH := $(PWD)
+GOPATH := $(VENDOR):$(PWD)
 
 # default environment
 GOOS		?= $(shell go env GOOS)

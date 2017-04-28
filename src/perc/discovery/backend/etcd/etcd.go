@@ -173,7 +173,7 @@ func (s *Service) LookupProviders(n int, svc string) ([]string, error) {
   outer:
   for _, c := range s.clients {
     cxt, cancel := context.WithTimeout(context.Background(), timeout)
-    rsp, err := c.Get(cxt, keyPath(keyPrefix, svc), clientv3.WithFromKey())
+    rsp, err := c.Get(cxt, keyPath(keyPrefix, svc), clientv3.WithFromKey(), clientv3.WithPrefix())
     cancel()
     if err != nil {
       etcdLookupErrorRate.Mark(1)
