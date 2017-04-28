@@ -21,7 +21,7 @@ const (
 )
 
 const (
-  timeout   = time.Second * 5
+  timeout   = time.Second * 10
 )
 
 var (
@@ -119,12 +119,21 @@ func (s *Service) RegisterProviders(inst string, svcs map[string]string) (*provi
   expires := time.Now().Add(timeout)
   for _, e := range s.clients {
     for k, v := range svcs {
+      
       cxt, cancel := context.WithTimeout(context.Background(), timeout)
-      _, err := e.Put(cxt, keyPath(keyPrefix, k, inst), v)
-      defer cancel()
+      grant, err := e.Grant(cxt, int64(timeout / time.Second))
+      cancel()
       if err != nil {
         return nil, err
       }
+      
+      cxt, cancel = context.WithTimeout(context.Background(), timeout)
+      _, err = e.Put(cxt, keyPath(keyPrefix, k, inst), v, clientv3.WithLease(grant.ID))
+      cancel()
+      if err != nil {
+        return nil, err
+      }
+      
     }
   }
   
@@ -165,7 +174,7 @@ func (s *Service) LookupProviders(n int, svc string) ([]string, error) {
   for _, c := range s.clients {
     cxt, cancel := context.WithTimeout(context.Background(), timeout)
     rsp, err := c.Get(cxt, keyPath(keyPrefix, svc), clientv3.WithFromKey())
-    defer cancel()
+    cancel()
     if err != nil {
       etcdLookupErrorRate.Mark(1)
       return nil, err
