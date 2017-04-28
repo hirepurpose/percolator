@@ -44,13 +44,10 @@ func (r *Registry) publish(inst string, svcs map[string]string) {
     if err != nil {
       alt.Errorf("discovery: Could not register local services: %v", err)
     }else{
-      wait = time.Now().Sub(l.Expires) / 2 // wait half the duration until expiration
+      wait = l.Expires.Sub(time.Now()) / 2 // wait half the duration until expiration
     }
     if wait < time.Second {
       wait = time.Second // sanity check
-    }
-    if debug.TRACE {
-      alt.Debugf("discovery: Renewing lease in %v", wait)
     }
     <- time.After(wait)
   }
