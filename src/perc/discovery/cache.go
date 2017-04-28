@@ -13,7 +13,7 @@ import (
 )
 
 const (
-  DefaultTimeout    = time.Minute * 5
+  DefaultTimeout    = time.Second * 30
   DefaultMaxRecords = 100
 )
 
