@@ -2,16 +2,17 @@ package discovery
 
 import (
   "fmt"
-  "perc/discovery/etcd"
   "perc/discovery/provider"
+  "perc/discovery/backend/etcd"
 )
 
 /**
  * A discovery service
  */
 type Service interface {
-  ServiceProvider(string)(string, error)
-  ServiceProviders(int, string)([]string, error)
+  RegisterProviders(string, map[string]string)(*provider.Lease, error)
+  LookupProvider(string)(string, error)
+  LookupProviders(int, string)([]string, error)
 }
 
 /**

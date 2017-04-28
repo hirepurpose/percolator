@@ -2,6 +2,7 @@ package provider
 
 import (
   "fmt"
+  "time"
   "strings"
 )
 
@@ -105,4 +106,13 @@ func (p Provider) String() string {
     s += e.String()
   }
   return p.Type +"://"+ s
+}
+
+/**
+ * A service registration lease
+ */
+type Lease struct {
+  Instance  string
+  Services  map[string]string
+  Expires   time.Time
 }

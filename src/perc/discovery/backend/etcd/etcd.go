@@ -2,7 +2,6 @@ package etcd
 
 import (
   "fmt"
-  "net"
   "time"
   "path"
   "strings"
@@ -18,7 +17,7 @@ import (
 )
 
 const (
-  KeyPrefix = "/disc/perc"
+  keyPrefix = "/disc/perc"
 )
 
 const (
@@ -55,7 +54,7 @@ func New(d string, z []provider.Zone) (*Service, error) {
   clients := make([]*clientv3.Client, 0)
   
   for _, e := range z {
-    c, err := ClientForZone(d, e)
+    c, err := clientForZone(d, e)
     if err != nil {
       alt.Errorf("etcd: Could not lookup discovery service: %v", err)
     }
@@ -74,24 +73,16 @@ func New(d string, z []provider.Zone) (*Service, error) {
 /**
  * Create a client for the specified zone
  */
-func ClientForZone(d string, z provider.Zone) (*clientv3.Client, error) {
+func clientForZone(d string, z provider.Zone) (*clientv3.Client, error) {
   
-  q := z.String()
-  if d != "" {
-    q += "."+ d
-  }
-  
-  r, err := net.LookupTXT(q)
+  r, err := provider.LookupTXT(d, z)
   if err != nil {
     return nil, err
   }
-  if len(r) < 1 {
-    return nil, fmt.Errorf("No records for zone: %v", q)
-  }
   
-  nodes := strings.Split(r[0], ",")
+  nodes := strings.Split(r, ",")
   if debug.VERBOSE {
-    alt.Debugf("etcd: Resolved discovery service: %v -> %v", q, strings.Join(nodes, ", "))
+    alt.Debugf("etcd: Resolved discovery service: %v -> %v", z, strings.Join(nodes, ", "))
   }
   
   c, err := clientv3.New(clientv3.Config{Endpoints:nodes, DialTimeout:time.Second * 5})
@@ -105,7 +96,7 @@ func ClientForZone(d string, z provider.Zone) (*clientv3.Client, error) {
 /**
  * Build a path for the provided keys
  */
-func KeyPath(k ...string) string {
+func keyPath(k ...string) string {
   var p string
   for _, e := range k {
     if p != "" {
@@ -118,10 +109,33 @@ func KeyPath(k ...string) string {
 }
 
 /**
+ * Register services
+ */
+func (s *Service) RegisterProviders(inst string, svcs map[string]string) (*provider.Lease, error) {
+  if len(s.clients) < 1 {
+    return nil, provider.ErrNoDiscovery
+  }
+  
+  expires := time.Now().Add(timeout)
+  for _, e := range s.clients {
+    for k, v := range svcs {
+      cxt, cancel := context.WithTimeout(context.Background(), timeout)
+      _, err := e.Put(cxt, keyPath(keyPrefix, k, inst), v)
+      defer cancel()
+      if err != nil {
+        return nil, err
+      }
+    }
+  }
+  
+  return &provider.Lease{inst, svcs, expires}, nil
+}
+
+/**
  * Obtain the next service provider
  */
-func (s *Service) ServiceProvider(svc string) (string, error) {
-  p, err := s.ServiceProviders(1, svc)
+func (s *Service) LookupProvider(svc string) (string, error) {
+  p, err := s.LookupProviders(1, svc)
   if err != nil {
     return "", err
   }
@@ -134,7 +148,7 @@ func (s *Service) ServiceProvider(svc string) (string, error) {
 /**
  * Lookup a service
  */
-func (s *Service) ServiceProviders(n int, svc string) ([]string, error) {
+func (s *Service) LookupProviders(n int, svc string) ([]string, error) {
   etcdLookupRate.Mark(1)
   start := time.Now()
   defer func(){
@@ -150,7 +164,7 @@ func (s *Service) ServiceProviders(n int, svc string) ([]string, error) {
   outer:
   for _, c := range s.clients {
     cxt, cancel := context.WithTimeout(context.Background(), timeout)
-    rsp, err := c.Get(cxt, KeyPath(KeyPrefix, svc), clientv3.WithFromKey())
+    rsp, err := c.Get(cxt, keyPath(keyPrefix, svc), clientv3.WithFromKey())
     defer cancel()
     if err != nil {
       etcdLookupErrorRate.Mark(1)

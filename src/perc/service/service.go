@@ -129,7 +129,7 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
       alt.Errorf("service: Discovery not available")
       return
     }
-    addr, err = s.discovery.ServiceProvider(r.Backends[0])
+    addr, err = s.discovery.LookupProvider(r.Backends[0])
     if err != nil {
       alt.Errorf("service: Could not discover service: %v", err)
       return

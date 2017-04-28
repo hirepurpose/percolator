@@ -77,8 +77,15 @@ func NewCache(s Service, t time.Duration) *Cache {
 /**
  * Obtain the next service provider
  */
-func (c *Cache) ServiceProvider(svc string) (string, error) {
-  r, err := c.ServiceProviders(1, svc)
+func (c *Cache) RegisterProviders(inst string, svcs map[string]string) (*provider.Lease, error) {
+  return c.service.RegisterProviders(inst, svcs)
+}
+
+/**
+ * Obtain the next service provider
+ */
+func (c *Cache) LookupProvider(svc string) (string, error) {
+  r, err := c.LookupProviders(1, svc)
   if err != nil {
     return "", err
   }
@@ -91,7 +98,7 @@ func (c *Cache) ServiceProvider(svc string) (string, error) {
 /**
  * Lookup a service
  */
-func (c *Cache) ServiceProviders(n int, svc string) ([]string, error) {
+func (c *Cache) LookupProviders(n int, svc string) ([]string, error) {
   c.Lock()
   defer c.Unlock()
   now := time.Now()
@@ -101,7 +108,7 @@ func (c *Cache) ServiceProviders(n int, svc string) ([]string, error) {
     if debug.VERBOSE {
       alt.Debugf("cache: Querying for providers: %v", svc)
     }
-    r, err := c.service.ServiceProviders(c.maxRecords, svc)
+    r, err := c.service.LookupProviders(c.maxRecords, svc)
     if err != nil {
       return nil, err
     }
