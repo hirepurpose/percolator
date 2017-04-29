@@ -1,49 +1,59 @@
 
-# environment
+# path to the project root
 export PROJECT	:= $(shell cd $(PWD)/.. && pwd)
 export VENDOR		:= $(PROJECT)/vendor
-export ENVIRON 	?= devel
-
-# update the gopath
-GOPATH := $(VENDOR):$(PWD)
-
-# default environment
-GOOS		?= $(shell go env GOOS)
-GOARCH	?= $(shell go env GOARCH)
-
-# build paths
-ARCH				= $(GOOS)_$(GOARCH)
-OUTPUT_DIR	= $(PWD)/target
-ARCH_DIR		=	$(OUTPUT_DIR)/$(ARCH)
-TARGET_DIR	= $(ARCH_DIR)/$(ENVIRON)
-BUILD_DIR		= $(TARGET_DIR)/product
 
 # main project root
 COMPONENT := percolator
 # the component's main package
-MAIN := ./src/perc/main
-# product name
-PRODUCT_NAME = $(COMPONENT)
-# build and packaging
-PRODUCT	= $(BUILD_DIR)/bin/$(PRODUCT_NAME)
+MAIN := ./src/$(COMPONENT)/main
 
 # sources
 SRC	= $(shell find src -name \*.go -print)
+LIB	= $(shell find $(FRAMEWORK)/src/hp $(VENDOR)/src/github.com/bww -name \*.go -print)
+
+# include the base makefile
+include ../build/subproj.make
+# include the environment
+include ../build/env/$(ENVIRON).make
+
+# environment
+export HP_HOME := $(BUILD_DIR)
+
+# the version to tag images with
+VERSION			= latest
+# the remote image repo
+IMAGE_REPO	= 371393096049.dkr.ecr.us-east-1.amazonaws.com/hirepurpose/$(PRODUCT_NAME)
+# the local image tag
+LOCAL_TAG 	= hirepurpose/$(PRODUCT_NAME):latest
+# the remote image tag
+REMOTE_TAG 	= $(IMAGE_REPO):$(VERSION)
 
 # test packages
-# TEST_PKGS := $(COMPONENT)/service
+TEST_PKGS := percolator/service
 
-.PHONY: all run test build
+.PHONY: all web run test stage release
 
-all: build
+all: local
 
-run: build ## Build and run the service with default parameters
+run: local ## Build and run the service with default parameters
 	$(PRODUCT) -debug $(FLAGS)
 
 test: ## Run tests
 	@if [ ! -z "$(TEST_PKGS)" ]; then go test -test.v $(TEST_PKGS); fi
 
-$(PRODUCT): $(SRC)
-	mkdir -p $(BUILD_DIR)/bin && go build -o $(PRODUCT) $(MAIN)
+stage: export DEPLOY_CLUSTER = Sandbox
+stage: export DEPLOY_TASK = SandboxPercolator
+stage: export DEPLOY_SERVICE = SandboxPercolator
+stage: export VERSION = staging
+stage: export MIN_PERCENT_DEPLOYMENT = 0
+stage: export MAX_PERCENT_DEPLOYMENT = 100
+stage: clean deploy ## Build and push an updated image to Elastic Container Service and deploy the update on the staging cluster
 
-build: $(PRODUCT) ## Build the product
+release: export DEPLOY_CLUSTER = HPOne
+release: export DEPLOY_TASK = Percolator
+release: export DEPLOY_SERVICE = Percolator
+release: export VERSION = production
+release: export MIN_PERCENT_DEPLOYMENT = 50
+release: export MAX_PERCENT_DEPLOYMENT = 200
+release: clean deploy ## Build and push an updated image to Elastic Container Service and deploy the update on the production cluster

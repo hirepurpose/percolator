@@ -10,4 +10,4 @@ WORKDIR /service/percolator
 
 # Set our entry point and expose ports
 ENTRYPOINT ["/service/percolator/bin/percolator"]
-EXPOSE 8001-8010
+EXPOSE 3000-3999
