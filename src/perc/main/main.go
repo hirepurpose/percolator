@@ -29,23 +29,28 @@ func main() {
   var proxyRoutes flagList
   
   cmdline       := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-  fDomain       := cmdline.String   ("domain",        coalesce(os.Getenv("HP_DISCOVERY_DOMAIN"), "disc.hirepurpose.com"),                     "The domain to use for service discovery.")
-  fDiscovery    := cmdline.String   ("discovery",     coalesce(os.Getenv("HP_DISCOVERY_SERVICE"), "etcd://us-east-1"),                        "The discovery service used for service lookup, specified as 'service://[az.]region[,..,[azN.]regionN]'. Regions should be provided in descending order of preference.")
-  fInflux       := cmdline.String   ("influxdb",      os.Getenv("HP_METRICS_INFLUXDB"),                                                       "The InfluxDB metrics reporting backend, specified as: 'host[:port]'.")
-  fEnviron      := cmdline.String   ("environ",       coalesce(os.Getenv("HP_ENVIRON"), os.Getenv("ENVIRON"), "devel"),                       "The environment in which the service is running (devel, staging, production).")
-  fSentry       := cmdline.String   ("sentry",        os.Getenv("HP_SENTRY"),                                                                 "Report errors to Sentry. The Sentry authentication DSN should be provided as an argument.")
-  fIOTimeout    := cmdline.Duration ("timeout",       strToDur(coalesce(os.Getenv("HP_TIMEOUT"), "0")),                                       "Specify both the read and write timeouts for client connections at once. This flag overrides -timeout:read and -timeout:write.")
-  fReadTimeout  := cmdline.Duration ("timeout:read",  strToDur(coalesce(os.Getenv("HP_TIMEOUT_READ"), "5s")),                                 "The read timeout for client connections.")
-  fWriteTimeout := cmdline.Duration ("timeout:write", strToDur(coalesce(os.Getenv("HP_TIMEOUT_WRITE"), "5s")),                                "The write timeout for client connections.")
-  fCacheTimeout := cmdline.Duration ("timeout:cache", strToDur(coalesce(os.Getenv("HP_TIMEOUT_CACHE"), "30s")),                               "The timeout for cached service providers. This should not be significantly larger than the backend's expiration.")
-  fOptimize     := cmdline.Bool     ("optimize",      strToBool(os.Getenv("HP_OPTIMIZE")),                                                    "Optimize data transfer, if possible, by enabling zero-copy transfer.")
-  fDebug        := cmdline.Bool     ("debug",         strToBool(os.Getenv("HP_DEBUG")),                                                       "Enable debugging mode.")
-  fStack        := cmdline.Bool     ("debug:stack",   strToBool(os.Getenv("HP_DEBUG_STACK")),                                                 "Enable stack debugging mode.")
-  fVerbose      := cmdline.Bool     ("verbose",       strToBool(os.Getenv("HP_VERBOSE")),                                                     "Enable verbose debugging mode.")
-  fProfileCPU   := cmdline.String   ("profile:cpu",   os.Getenv("HP_PROFILE_CPU"),                                                            "Enable CPU profiling and write data to the provided path.")
-  cmdline.Var    (&proxyRoutes,      "route",                                                                                                 "Add a proxy route for the specified service as: 'listen_port=(host:port,...|service)'. Use this flag repeatedly for multiple routes.")
+  fDomain       := cmdline.String   ("domain",        coalesce(os.Getenv("HP_DISCOVERY_DOMAIN"), "disc.hirepurpose.com"),   "The domain to use for service discovery.")
+  fDiscovery    := cmdline.String   ("discovery",     coalesce(os.Getenv("HP_DISCOVERY_SERVICE"), "etcd://us-east-1"),      "The discovery service used for service lookup, specified as 'service://[az.]region[,..,[azN.]regionN]'. Regions should be provided in descending order of preference.")
+  fInflux       := cmdline.String   ("influxdb",      os.Getenv("HP_METRICS_INFLUXDB"),                                     "The InfluxDB metrics reporting backend, specified as: 'host[:port]'.")
+  fEnviron      := cmdline.String   ("environ",       coalesce(os.Getenv("HP_ENVIRON"), os.Getenv("ENVIRON"), "devel"),     "The environment in which the service is running (devel, staging, production).")
+  fSentry       := cmdline.String   ("sentry",        os.Getenv("HP_SENTRY"),                                               "Report errors to Sentry. The Sentry authentication DSN should be provided as an argument.")
+  fIOTimeout    := cmdline.Duration ("timeout",       strToDur(coalesce(os.Getenv("HP_TIMEOUT"), "0")),                     "Specify both the read and write timeouts for client connections at once. This flag overrides -timeout:read and -timeout:write.")
+  fReadTimeout  := cmdline.Duration ("timeout:read",  strToDur(coalesce(os.Getenv("HP_TIMEOUT_READ"), "5s")),               "The read timeout for client connections.")
+  fWriteTimeout := cmdline.Duration ("timeout:write", strToDur(coalesce(os.Getenv("HP_TIMEOUT_WRITE"), "5s")),              "The write timeout for client connections.")
+  fCacheTimeout := cmdline.Duration ("timeout:cache", strToDur(coalesce(os.Getenv("HP_TIMEOUT_CACHE"), "30s")),             "The timeout for cached service providers. This should not be significantly larger than the backend's expiration.")
+  fOptimize     := cmdline.Bool     ("optimize",      strToBool(os.Getenv("HP_OPTIMIZE")),                                  "Optimize data transfer, if possible, by enabling zero-copy transfer.")
+  fDebug        := cmdline.Bool     ("debug",         strToBool(os.Getenv("HP_DEBUG")),                                     "Enable debugging mode.")
+  fStack        := cmdline.Bool     ("debug:stack",   strToBool(os.Getenv("HP_DEBUG_STACK")),                               "Enable stack debugging mode.")
+  fVerbose      := cmdline.Bool     ("verbose",       strToBool(os.Getenv("HP_VERBOSE")),                                   "Enable verbose debugging mode.")
+  fProfileCPU   := cmdline.String   ("profile:cpu",   os.Getenv("HP_PROFILE_CPU"),                                          "Enable CPU profiling and write data to the provided path.")
+  cmdline.Var    (&proxyRoutes,      "route",                                                                               "Add a proxy route for the specified service as: 'listen_port=(host:port,...|service)'. Use this flag repeatedly for multiple routes.")
   cmdline.Parse(os.Args[1:])
   
+  if r := os.Getenv("HP_ROUTES"); r != "" {
+    for _, e := range strings.Split(r, ";") {
+      proxyRoutes = append(proxyRoutes, strings.TrimSpace(e))
+    }
+  }
   if len(proxyRoutes) < 1 {
     fmt.Println("* * * No routes defined; use -route 'listen_port=(host:port,...|service)'")
     os.Exit(-1)

@@ -6,7 +6,7 @@ export VENDOR		:= $(PROJECT)/vendor
 # main project root
 COMPONENT := percolator
 # the component's main package
-MAIN := ./src/$(COMPONENT)/main
+MAIN := ./src/perc/main
 
 # sources
 SRC	= $(shell find src -name \*.go -print)
