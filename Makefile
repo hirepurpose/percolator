@@ -50,7 +50,7 @@ stage: export MIN_PERCENT_DEPLOYMENT = 0
 stage: export MAX_PERCENT_DEPLOYMENT = 100
 stage: clean deploy ## Build and push an updated image to Elastic Container Service and deploy the update on the staging cluster
 
-release: export DEPLOY_CLUSTER = HPOne
+release: export DEPLOY_CLUSTER = Discovery
 release: export DEPLOY_TASK = Percolator
 release: export DEPLOY_SERVICE = Percolator
 release: export VERSION = production
