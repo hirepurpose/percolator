@@ -57,6 +57,7 @@ func New(d string, z []provider.Zone) (*Service, error) {
     c, err := clientForZone(d, e)
     if err != nil {
       alt.Errorf("etcd: Could not lookup discovery service: %v", err)
+      continue
     }
     clients = append(clients, c)
     if debug.VERBOSE {
