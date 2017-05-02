@@ -24,6 +24,9 @@ func New(d, s string) (Service, error) {
   if err != nil {
     return nil, err
   }
+  if len(spec.Zones) < 1 {
+    return nil, fmt.Errorf("No zones specified")
+  }
   
   switch spec.Type {
     case "etcd":

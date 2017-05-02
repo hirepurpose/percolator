@@ -54,7 +54,7 @@ func New(d string, z []provider.Zone) (*Service, error) {
   clients := make([]*clientv3.Client, 0)
   
   for _, e := range z {
-    c, err := clientForZone(d, e)
+    c, err := ClientForZone(d, e)
     if err != nil {
       alt.Errorf("etcd: Could not lookup discovery service: %v", err)
       continue
@@ -74,7 +74,7 @@ func New(d string, z []provider.Zone) (*Service, error) {
 /**
  * Create a client for the specified zone
  */
-func clientForZone(d string, z provider.Zone) (*clientv3.Client, error) {
+func ClientForZone(d string, z provider.Zone) (*clientv3.Client, error) {
   
   r, err := provider.LookupTXT(d, z)
   if err != nil {
@@ -92,21 +92,6 @@ func clientForZone(d string, z provider.Zone) (*clientv3.Client, error) {
   }
   
   return c, nil
-}
-
-/**
- * Build a path for the provided keys
- */
-func keyPath(k ...string) string {
-  var p string
-  for _, e := range k {
-    if p != "" {
-      p = path.Join(append([]string{p}, strings.Split(e, ".")...)...)
-    }else{
-      p = path.Join(strings.Split(e, ".")...)
-    }
-  }
-  return p
 }
 
 /**
@@ -129,7 +114,7 @@ func (s *Service) RegisterProviders(inst string, svcs map[string]string) (*provi
       }
       
       cxt, cancel = context.WithTimeout(context.Background(), timeout)
-      _, err = e.Put(cxt, keyPath(keyPrefix, k, inst), v, clientv3.WithLease(grant.ID))
+      _, err = e.Put(cxt, path.Join(keyPrefix, k, inst), v, clientv3.WithLease(grant.ID))
       cancel()
       if err != nil {
         return nil, err
@@ -174,7 +159,7 @@ func (s *Service) LookupProviders(n int, svc string) ([]string, error) {
   outer:
   for _, c := range s.clients {
     cxt, cancel := context.WithTimeout(context.Background(), timeout)
-    rsp, err := c.Get(cxt, keyPath(keyPrefix, svc), clientv3.WithFromKey(), clientv3.WithPrefix())
+    rsp, err := c.Get(cxt, path.Join(keyPrefix, svc), clientv3.WithFromKey(), clientv3.WithPrefix())
     cancel()
     if err != nil {
       etcdLookupErrorRate.Mark(1)
