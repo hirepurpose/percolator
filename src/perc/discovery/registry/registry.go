@@ -7,6 +7,7 @@ import (
 
 import (
   "github.com/bww/go-alert"
+  "github.com/bww/go-util/rand"
   "github.com/bww/go-util/debug"
 )
 
@@ -35,12 +36,13 @@ func (r *Registry) Publish(inst, svc, addr string) {
  * Publish
  */
 func (r *Registry) publish(inst string, svcs map[string]string) {
+  name := inst +"-"+ rand.RandomString(16)
   for {
     wait := time.Second * 10 // default wait
     if debug.TRACE {
-      alt.Debugf("discovery: Publishing services: <%v> %v", inst, svcs)
+      alt.Debugf("discovery: Publishing services: <%v> %v", name, svcs)
     }
-    l, err := r.service.RegisterProviders(inst, svcs)
+    l, err := r.service.RegisterProviders(name, svcs)
     if err != nil {
       alt.Errorf("discovery: Could not register local services: %v", err)
     }else{
