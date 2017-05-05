@@ -38,7 +38,7 @@ func (r *Registry) Publish(inst, svc, addr string) {
 func (r *Registry) publish(inst string, svcs map[string]string) {
   name := inst +"-"+ rand.RandomString(16)
   for {
-    wait := time.Second * 10 // default wait
+    wait := time.Second // default wait
     if debug.TRACE {
       alt.Debugf("discovery: Publishing services: <%v> %v", name, svcs)
     }

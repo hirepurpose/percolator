@@ -21,7 +21,8 @@ const (
 )
 
 const (
-  timeout   = time.Second * 10
+  timeout   = time.Second * 15
+  expiry    = time.Second * 30
 )
 
 var (
@@ -107,7 +108,7 @@ func (s *Service) RegisterProviders(inst string, svcs map[string]string) (*provi
     for k, v := range svcs {
       
       cxt, cancel := context.WithTimeout(context.Background(), timeout)
-      grant, err := e.Grant(cxt, int64(timeout / time.Second))
+      grant, err := e.Grant(cxt, int64(expiry / time.Second))
       cancel()
       if err != nil {
         return nil, err
