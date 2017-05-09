@@ -6,8 +6,8 @@ import (
   "flag"
   "time"
   "strings"
+  "net/http"
   "crypto/sha1"
-  "runtime/pprof"
   "perc/route"
   "perc/service"
   "perc/discovery"
@@ -29,6 +29,7 @@ func main() {
   var proxyRoutes flagList
   
   cmdline       := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+  fProfile      := cmdline.String   ("profile",       coalesce(os.Getenv("HP_API_PPROF"), "localhost:2221"),                "The interface and port to accept pprof (profiling) connections on.")
   fDomain       := cmdline.String   ("domain",        coalesce(os.Getenv("HP_DISCOVERY_DOMAIN"), "disc.hirepurpose.com"),   "The domain to use for service discovery.")
   fDiscovery    := cmdline.String   ("discovery",     coalesce(os.Getenv("HP_DISCOVERY_SERVICE"), "etcd://us-east-1"),      "The discovery service used for service lookup, specified as 'service://[az.]region[,..,[azN.]regionN]'. Regions should be provided in descending order of preference.")
   fInflux       := cmdline.String   ("influxdb",      os.Getenv("HP_METRICS_INFLUXDB"),                                     "The InfluxDB metrics reporting backend, specified as: 'host[:port]'.")
@@ -42,7 +43,6 @@ func main() {
   fDebug        := cmdline.Bool     ("debug",         strToBool(os.Getenv("HP_DEBUG")),                                     "Enable debugging mode.")
   fStack        := cmdline.Bool     ("debug:stack",   strToBool(os.Getenv("HP_DEBUG_STACK")),                               "Enable stack debugging mode.")
   fVerbose      := cmdline.Bool     ("verbose",       strToBool(os.Getenv("HP_VERBOSE")),                                   "Enable verbose debugging mode.")
-  fProfileCPU   := cmdline.String   ("profile:cpu",   os.Getenv("HP_PROFILE_CPU"),                                          "Enable CPU profiling and write data to the provided path.")
   cmdline.Var    (&proxyRoutes,      "route",                                                                               "Add a proxy route for the specified service as: 'listen_port=(host:port,...|service)'. Use this flag repeatedly for multiple routes.")
   cmdline.Parse(os.Args[1:])
   
@@ -140,17 +140,11 @@ func main() {
     *fWriteTimeout = *fIOTimeout
   }
   
-  if *fProfileCPU != "" {
-    f, err := os.Create(*fProfileCPU)
-    if err != nil {
-      panic(fmt.Errorf("Could not create CPU profile: ", err))
-    }
-    err = pprof.StartCPUProfile(f)
-    if err != nil {
-      panic(fmt.Errorf("Could not start CPU profile: ", err))
-    }
-    fmt.Printf("-----> Profiling CPU; logging to: %v\n", *fProfileCPU)
-    defer pprof.StopCPUProfile()
+  if *fProfile != "" && *fProfile != "none" {
+    fmt.Printf("-----> Profiling via pprof: %v\n", *fProfile)
+    go func() {
+      alt.Errorf("* * * Could not profile: %v", http.ListenAndServe(*fProfile, nil))
+    }()
   }
   
   svc := service.New(service.Config{
