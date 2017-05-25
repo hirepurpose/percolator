@@ -21,8 +21,8 @@ const (
 )
 
 const (
-  timeout   = time.Second * 15
-  expiry    = time.Second * 30
+  timeout   = time.Second * 30
+  expiry    = time.Second * 60
 )
 
 var (
