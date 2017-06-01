@@ -42,6 +42,7 @@ run: local ## Build and run the service with default parameters
 test: ## Run tests
 	@if [ ! -z "$(TEST_PKGS)" ]; then go test -test.v $(TEST_PKGS); fi
 
+stage: export EXPECT_BRANCH ?= staging
 stage: export DEPLOY_CLUSTER = Sandbox
 stage: export DEPLOY_TASK = SandboxPercolator
 stage: export DEPLOY_SERVICE = SandboxPercolator
@@ -50,6 +51,7 @@ stage: export MIN_PERCENT_DEPLOYMENT = 0
 stage: export MAX_PERCENT_DEPLOYMENT = 100
 stage: clean deploy ## Build and push an updated image to Elastic Container Service and deploy the update on the staging cluster
 
+release: export EXPECT_BRANCH ?= master
 release: export DEPLOY_CLUSTER = Discovery
 release: export DEPLOY_TASK = Percolator
 release: export DEPLOY_SERVICE = Percolator
