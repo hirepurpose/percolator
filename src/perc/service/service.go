@@ -207,7 +207,7 @@ func (s *Service) copyGeneric(dst, src *net.TCPConn, xfer metrics.Meter, errs ch
     }
   }
   
-  if debug.VERBOSE {
+  if debug.VERBOSE && copied > 0 {
     alt.Debugf("%v -> %v: copied <gen> %d", src.RemoteAddr(), dst.RemoteAddr(), copied)
   }
   errs <- io.EOF
