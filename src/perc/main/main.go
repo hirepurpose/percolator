@@ -29,7 +29,7 @@ func main() {
   var proxyRoutes flagList
   
   cmdline       := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-  fProfile      := cmdline.String   ("profile",       coalesce(os.Getenv("HP_API_PPROF"), "localhost:2221"),                "The interface and port to accept pprof (profiling) connections on.")
+  fProfile      := cmdline.String   ("profile",       coalesce(os.Getenv("HP_API_PPROF"), ":2221"),                         "The interface and port to accept pprof (profiling) connections on.")
   fDomain       := cmdline.String   ("domain",        coalesce(os.Getenv("HP_DISCOVERY_DOMAIN"), "disc.hirepurpose.com"),   "The domain to use for service discovery.")
   fDiscovery    := cmdline.String   ("discovery",     coalesce(os.Getenv("HP_DISCOVERY_SERVICE"), "etcd://us-east-1"),      "The discovery service used for service lookup, specified as 'service://[az.]region[,..,[azN.]regionN]'. Regions should be provided in descending order of preference.")
   fInflux       := cmdline.String   ("influxdb",      os.Getenv("HP_METRICS_INFLUXDB"),                                     "The InfluxDB metrics reporting backend, specified as: 'host[:port]'.")
