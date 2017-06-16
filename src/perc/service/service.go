@@ -124,13 +124,14 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     }
   }()
   
-  var addr string
+  var backend, addr string
   if r.Service {
     if s.discovery == nil {
       alt.Errorf("service: Discovery not available")
       return
     }
-    addr, err = s.discovery.LookupProvider(r.Backends[0])
+    backend = r.Backends[0]
+    addr, err = s.discovery.LookupProvider(backend)
     if err != nil {
       alt.Errorf("service: Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
       return
@@ -140,12 +141,12 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   }
   
   if debug.VERBOSE {
-    alt.Debugf("%v: Proxying to backend: %v", c.RemoteAddr(), addr)
+    alt.Debugf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
   }
   
   p, err := net.Dial("tcp", addr)
   if err != nil {
-    alt.Errorf("service: %v: Could not connect to backend: %v", c.RemoteAddr(), addr)
+    alt.Errorf("service: %v: Could not connect to backend: %v (%v)", c.RemoteAddr(), addr, backend)
     return
   }
   
@@ -162,11 +163,11 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   
   err = <- errs
   if err != io.EOF {
-    alt.Errorf("service: %v -> %v: Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), err)
+    alt.Errorf("service: %v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
   }
   
   if debug.VERBOSE {
-    alt.Debugf("%v: Connection will end", c.RemoteAddr())
+    alt.Debugf("%v: Connection will end: %v (%v)", c.RemoteAddr(), addr, backend)
   }
 }
 
