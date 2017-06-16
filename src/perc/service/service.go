@@ -5,6 +5,7 @@ import (
   "fmt"
   "net"
   "time"
+  "strings"
   "perc/route"
   "perc/discovery"
 )
@@ -131,7 +132,7 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     }
     addr, err = s.discovery.LookupProvider(r.Backends[0])
     if err != nil {
-      alt.Errorf("service: Could not discover service: %v", err)
+      alt.Errorf("service: Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
       return
     }
   }else{

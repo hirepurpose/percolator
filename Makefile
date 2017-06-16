@@ -46,16 +46,18 @@ stage: export EXPECT_BRANCH ?= staging
 stage: export DEPLOY_CLUSTER = Sandbox
 stage: export DEPLOY_TASK = SandboxPercolator
 stage: export DEPLOY_SERVICE = SandboxPercolator
-stage: export VERSION = staging
 stage: export MIN_PERCENT_DEPLOYMENT = 0
 stage: export MAX_PERCENT_DEPLOYMENT = 100
+stage: export ENVIRON = staging
+stage: export VERSION = staging
 stage: clean deploy ## Build and push an updated image to Elastic Container Service and deploy the update on the staging cluster
 
 release: export EXPECT_BRANCH ?= master
 release: export DEPLOY_CLUSTER = Discovery
 release: export DEPLOY_TASK = Percolator
 release: export DEPLOY_SERVICE = Percolator
-release: export VERSION = production
 release: export MIN_PERCENT_DEPLOYMENT = 50
 release: export MAX_PERCENT_DEPLOYMENT = 200
+release: export ENVIRON = release
+release: export VERSION = production
 release: clean deploy ## Build and push an updated image to Elastic Container Service and deploy the update on the production cluster
