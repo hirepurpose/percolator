@@ -8,12 +8,20 @@ import (
   "strings"
   "perc/route"
   "perc/discovery"
+  "os"
+  "os/signal"
+  "sync/atomic"
 )
 
 import (
   "github.com/bww/go-alert"
   "github.com/bww/go-util/debug"
   "github.com/rcrowley/go-metrics"
+)
+
+var (
+  copyOpen    int64
+  handlerOpen int64
 )
 
 var (
@@ -39,9 +47,9 @@ type Config struct {
   Instance      string
   Discovery     discovery.Service
   Routes        []*route.Route
-  ZeroCopy      bool
   ReadTimeout   time.Duration
   WriteTimeout  time.Duration
+  Debug         bool
 }
 
 /**
@@ -52,15 +60,15 @@ type Service struct {
   instance  string
   discovery discovery.Service
   routes    []*route.Route
-  optimize  bool
   rto, wto  time.Duration
+  debug     bool
 }
 
 /**
  * Create a new service
  */
 func New(conf Config) *Service {
-  return &Service{conf.Name, conf.Instance, conf.Discovery, conf.Routes, conf.ZeroCopy, conf.ReadTimeout, conf.WriteTimeout}
+  return &Service{conf.Name, conf.Instance, conf.Discovery, conf.Routes, conf.ReadTimeout, conf.WriteTimeout, conf.Debug}
 }
 
 /**
@@ -68,6 +76,16 @@ func New(conf Config) *Service {
  */
 func (s *Service) Run() error {
   var err error
+  
+  if s.debug {
+    sig := make(chan os.Signal, 1)
+    signal.Notify(sig, os.Interrupt)
+    go func() {
+      for range sig {
+        fmt.Printf("service: Currently running handlers: %d, I/O workers: %d\n", atomic.LoadInt64(&handlerOpen), atomic.LoadInt64(&copyOpen))
+      }
+    }()
+  }
   
   l := make([]net.Listener, len(s.routes))
   for i, e := range s.routes {
@@ -104,6 +122,9 @@ func (s *Service) Run() error {
 func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   var b *net.TCPConn
   var err error
+  
+  atomic.AddInt64(&handlerOpen, 1)
+  defer atomic.AddInt64(&handlerOpen, -1)
   
   if debug.VERBOSE {
     alt.Debugf("%v: Accepted connection", c.RemoteAddr())
@@ -144,25 +165,26 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     alt.Debugf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
   }
   
-  p, err := net.Dial("tcp", addr)
+  d := net.Dialer{Timeout: time.Second * 5}
+  p, err := d.Dial("tcp", addr)
   if err != nil {
     alt.Errorf("service: %v: Could not connect to backend: %v (%v)", c.RemoteAddr(), addr, backend)
     return
   }
   
   b = p.(*net.TCPConn)
-  errs := make(chan error, 2)
+  rerrs := make(chan error, 1)
+  werrs := make(chan error, 1)
   
-  if s.optimize {
-    go s.copyOptimized(c, b, proxyBytesReadRate, errs)
-    go s.copyOptimized(b, c, proxyBytesWriteRate, errs)
-  }else{
-    go s.copyGeneric(c, b, proxyBytesReadRate, errs)
-    go s.copyGeneric(b, c, proxyBytesWriteRate, errs)
+  go s.copyGeneric(c, b, proxyBytesReadRate, rerrs)
+  go s.copyGeneric(b, c, proxyBytesWriteRate, werrs)
+  
+  var ok bool
+  select {
+    case err, ok = <- rerrs:
+    case err, ok = <- werrs:
   }
-  
-  err = <- errs
-  if err != io.EOF {
+  if ok && err != io.EOF {
     alt.Errorf("service: %v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
   }
   
@@ -176,6 +198,12 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
  */
 func (s *Service) copyGeneric(dst, src *net.TCPConn, xfer metrics.Meter, errs chan<- error) {
   var copied int64
+  
+  atomic.AddInt64(&copyOpen, 1)
+  defer func(){
+    atomic.AddInt64(&copyOpen, -1)
+    close(errs)
+  }()
   
   buf := make([]byte, 32 * 1024)
   for {
@@ -212,40 +240,4 @@ func (s *Service) copyGeneric(dst, src *net.TCPConn, xfer metrics.Meter, errs ch
   if debug.VERBOSE && copied > 0 {
     alt.Debugf("%v -> %v: copied <gen> %d", src.RemoteAddr(), dst.RemoteAddr(), copied)
   }
-  errs <- io.EOF
-}
-
-/**
- * Handling transfering data from a source to destination connection. Try
- * to avoid copying data.
- */
-func (s *Service) copyOptimized(dst, src *net.TCPConn, xfer metrics.Meter, errs chan<- error) {
-  var err error
-  
-  err = src.SetKeepAlive(false)
-  if err != nil {
-    errs <- err; return
-  }
-  
-  err = dst.SetKeepAlive(false)
-  if err != nil {
-    errs <- err; return
-  }
-  
-  f, err := src.File()
-  if err != nil {
-    errs <- err; return
-  }
-  
-  n, err := dst.ReadFrom(f)
-  if err != nil {
-    errs <- err; return
-  }
-  
-  xfer.Mark(n)
-  
-  if debug.VERBOSE {
-    alt.Debugf("%v -> %v: copied <opt> %d", src.RemoteAddr(), dst.RemoteAddr(), n)
-  }
-  errs <- io.EOF
 }

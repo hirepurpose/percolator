@@ -155,9 +155,9 @@ func main() {
     Instance:     instance,
     Discovery:    disc,
     Routes:       routes,
-    ZeroCopy:     *fOptimize,
     ReadTimeout:  *fReadTimeout,
     WriteTimeout: *fWriteTimeout,
+    Debug:        *fStack,
   })
   
   panic(svc.Run())
