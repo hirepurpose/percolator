@@ -165,10 +165,10 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     alt.Debugf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
   }
   
-  d := net.Dialer{Timeout: time.Second * 5}
+  d := net.Dialer{Timeout: time.Second * 10}
   p, err := d.Dial("tcp", addr)
   if err != nil {
-    alt.Errorf("service: %v: Could not connect to backend: %v (%v)", c.RemoteAddr(), addr, backend)
+    alt.Errorf("service: %v: Could not connect to backend: %v (%v): %v", c.RemoteAddr(), addr, backend, err)
     return
   }
   
