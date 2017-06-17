@@ -47,6 +47,7 @@ type Config struct {
   Instance      string
   Discovery     discovery.Service
   Routes        []*route.Route
+  ConnTimeout   time.Duration
   ReadTimeout   time.Duration
   WriteTimeout  time.Duration
   Debug         bool
@@ -56,19 +57,19 @@ type Config struct {
  * An API service
  */
 type Service struct {
-  name      string
-  instance  string
-  discovery discovery.Service
-  routes    []*route.Route
-  rto, wto  time.Duration
-  debug     bool
+  name          string
+  instance      string
+  discovery     discovery.Service
+  routes        []*route.Route
+  cto, rto, wto time.Duration
+  debug         bool
 }
 
 /**
  * Create a new service
  */
 func New(conf Config) *Service {
-  return &Service{conf.Name, conf.Instance, conf.Discovery, conf.Routes, conf.ReadTimeout, conf.WriteTimeout, conf.Debug}
+  return &Service{conf.Name, conf.Instance, conf.Discovery, conf.Routes, conf.ConnTimeout, conf.ReadTimeout, conf.WriteTimeout, conf.Debug}
 }
 
 /**
@@ -165,7 +166,7 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     alt.Debugf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
   }
   
-  d := net.Dialer{Timeout: time.Second * 10}
+  d := net.Dialer{Timeout:s.cto}
   p, err := d.Dial("tcp", addr)
   if err != nil {
     alt.Errorf("service: %v: Could not connect to backend: %v (%v): %v", c.RemoteAddr(), addr, backend, err)
