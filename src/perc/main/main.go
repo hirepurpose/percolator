@@ -29,7 +29,7 @@ func main() {
   var proxyRoutes flagList
   
   cmdline       := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-  fProfile      := cmdline.String   ("profile",       coalesce(os.Getenv("HP_API_PPROF"), ":2221"),                         "The interface and port to accept pprof (profiling) connections on.")
+  fMonitor      := cmdline.String   ("monitor",       coalesce(os.Getenv("HP_API_MONITOR"), ":2222"),                       "The interface and port to accept monitoring (profiling and health check) connections on.")
   fDomain       := cmdline.String   ("domain",        coalesce(os.Getenv("HP_DISCOVERY_DOMAIN"), "disc.hirepurpose.com"),   "The domain to use for service discovery.")
   fDiscovery    := cmdline.String   ("discovery",     coalesce(os.Getenv("HP_DISCOVERY_SERVICE"), "etcd://us-east-1"),      "The discovery service used for service lookup, specified as 'service://[az.]region[,..,[azN.]regionN]'. Regions should be provided in descending order of preference.")
   fInflux       := cmdline.String   ("influxdb",      os.Getenv("HP_METRICS_INFLUXDB"),                                     "The InfluxDB metrics reporting backend, specified as: 'host[:port]'.")
@@ -140,10 +140,11 @@ func main() {
     *fWriteTimeout = *fIOTimeout
   }
   
-  if *fProfile != "" && *fProfile != "none" {
-    fmt.Printf("-----> Profiling via pprof: %v\n", *fProfile)
+  if *fMonitor != "" && *fMonitor != "none" {
+    fmt.Printf("-----> Starting monitor and pprof at %v\n", *fMonitor)
     go func() {
-      alt.Errorf("* * * Could not profile: %v", http.ListenAndServe(*fProfile, nil))
+      http.HandleFunc("/v1/status", func(rsp http.ResponseWriter, req *http.Request){ rsp.WriteHeader(http.StatusOK) })
+      alt.Errorf("* * * Could not monitor: %v", http.ListenAndServe(*fMonitor, nil))
     }()
   }
   
