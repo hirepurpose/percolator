@@ -13,6 +13,8 @@ import (
   "perc/discovery"
 )
 
+import _ "net/http/pprof" // register HTTP handlers
+
 import (
   "github.com/bww/go-alert"
   "github.com/bww/go-alert/sentry"
