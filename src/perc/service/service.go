@@ -26,6 +26,8 @@ var (
 
 var (
   proxyConnRate metrics.Meter
+  proxyResolveTimer metrics.Timer
+  proxyLatencyTimer metrics.Timer
   proxyBytesReadRate metrics.Meter
   proxyBytesWriteRate metrics.Meter
 )
@@ -33,6 +35,10 @@ var (
 func init() {
   proxyConnRate = metrics.NewMeter()
   metrics.Register("percolator.proxy.conn.rate", proxyConnRate)
+  proxyResolveTimer = metrics.NewTimer()
+  metrics.Register("percolator.proxy.resolve.latency", proxyResolveTimer)
+  proxyLatencyTimer = metrics.NewTimer()
+  metrics.Register("percolator.proxy.conn.latency", proxyLatencyTimer)
   proxyBytesReadRate = metrics.NewMeter()
   metrics.Register("percolator.proxy.bytes.read.rate", proxyBytesReadRate)
   proxyBytesWriteRate = metrics.NewMeter()
@@ -146,6 +152,7 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     }
   }()
   
+  start := time.Now()
   var backend, addr string
   if r.Service {
     if s.discovery == nil {
@@ -162,10 +169,12 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     addr = r.NextBackend()
   }
   
+  proxyResolveTimer.Update(time.Since(start))
   if debug.VERBOSE {
     alt.Debugf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
   }
   
+  start = time.Now()
   d := net.Dialer{Timeout:s.cto}
   p, err := d.Dial("tcp", addr)
   if err != nil {
@@ -173,6 +182,7 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     return
   }
   
+  proxyLatencyTimer.Update(time.Since(start))
   b = p.(*net.TCPConn)
   rerrs := make(chan error, 1)
   werrs := make(chan error, 1)
