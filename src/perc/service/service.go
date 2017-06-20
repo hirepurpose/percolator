@@ -30,6 +30,7 @@ var (
   proxyResolveError metrics.Meter
   proxyLatencyTimer metrics.Timer
   proxyConnError metrics.Meter
+  proxyXferError metrics.Meter
   proxyBytesReadRate metrics.Meter
   proxyBytesWriteRate metrics.Meter
 )
@@ -39,6 +40,8 @@ func init() {
   metrics.Register("percolator.proxy.conn.rate", proxyConnRate)
   proxyConnError = metrics.NewMeter()
   metrics.Register("percolator.proxy.conn.error", proxyConnError)
+  proxyXferError = metrics.NewMeter()
+  metrics.Register("percolator.proxy.xfer.error", proxyXferError)
   proxyResolveTimer = metrics.NewTimer()
   metrics.Register("percolator.proxy.resolve.latency", proxyResolveTimer)
   proxyLatencyTimer = metrics.NewTimer()
@@ -207,6 +210,7 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     case err, ok = <- werrs:
   }
   if ok && err != io.EOF {
+    proxyXferError.Mark(1)
     alt.Errorf("service: %v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
   }
   
