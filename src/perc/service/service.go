@@ -27,7 +27,9 @@ var (
 var (
   proxyConnRate metrics.Meter
   proxyResolveTimer metrics.Timer
+  proxyResolveError metrics.Meter
   proxyLatencyTimer metrics.Timer
+  proxyConnError metrics.Meter
   proxyBytesReadRate metrics.Meter
   proxyBytesWriteRate metrics.Meter
 )
@@ -35,6 +37,8 @@ var (
 func init() {
   proxyConnRate = metrics.NewMeter()
   metrics.Register("percolator.proxy.conn.rate", proxyConnRate)
+  proxyConnError = metrics.NewMeter()
+  metrics.Register("percolator.proxy.conn.error", proxyConnError)
   proxyResolveTimer = metrics.NewTimer()
   metrics.Register("percolator.proxy.resolve.latency", proxyResolveTimer)
   proxyLatencyTimer = metrics.NewTimer()
@@ -153,15 +157,18 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   }()
   
   start := time.Now()
+  
   var backend, addr string
   if r.Service {
     if s.discovery == nil {
+      proxyResolveError.Mark(1)
       alt.Errorf("service: Discovery not available")
       return
     }
     backend = r.Backends[0]
     addr, err = s.discovery.LookupProvider(backend)
     if err != nil {
+      proxyResolveError.Mark(1)
       alt.Errorf("service: Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
       return
     }
@@ -170,19 +177,23 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   }
   
   proxyResolveTimer.Update(time.Since(start))
+  
   if debug.VERBOSE {
     alt.Debugf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
   }
   
   start = time.Now()
+  
   d := net.Dialer{Timeout:s.cto}
   p, err := d.Dial("tcp", addr)
   if err != nil {
+    proxyConnError.Mark(1)
     alt.Errorf("service: %v: Could not connect to backend: %v (%v): %v", c.RemoteAddr(), addr, backend, err)
     return
   }
   
   proxyLatencyTimer.Update(time.Since(start))
+  
   b = p.(*net.TCPConn)
   rerrs := make(chan error, 1)
   werrs := make(chan error, 1)
