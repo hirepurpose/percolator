@@ -49,10 +49,11 @@ func init() {
 
 // Service stats
 type Stats struct {
-  OpenConnections           int64             `json:"open_connections"`
-  TotalConnections          int64             `json:"total_connections"`
-  TotalConnectionsByRoute   map[string]int64  `json:"total_connections_by_route"`
-  RunningWorkers            int64             `json:"running_io_workers"`
+  OpenConnections           int64             `json:"open_conns"`
+  TotalConnections          int64             `json:"total_conns"`
+  BytesTransferred          int64             `json:"bytes_xfer"`
+  TotalConnectionsByRoute   map[string]int64  `json:"total_conns_by_route"`
+  RunningWorkers            int64             `json:"io_workers"`
 }
 
 // Service config
@@ -79,6 +80,7 @@ type Service struct {
   copyOpen        int64
   handlerOpen     int64
   handlerTotal    int64
+  handlerXfer     int64
   handlerByRoute  *cmap
   handlerUpdate   chan<- keyval
 }
@@ -88,7 +90,7 @@ func New(conf Config) *Service {
   m := newCmap()
   return &Service{
     conf.Name, conf.Instance, conf.Discovery, conf.Routes, conf.ConnTimeout, conf.ReadTimeout, conf.WriteTimeout, conf.Debug,
-    0, 0, 0, m, m.Put(),
+    0, 0, 0, 0, m, m.Put(),
   }
 }
 
@@ -97,6 +99,7 @@ func (s *Service) Stats() Stats {
   return Stats{
     OpenConnections:atomic.LoadInt64(&s.handlerOpen),
     TotalConnections:atomic.LoadInt64(&s.handlerTotal),
+    BytesTransferred:atomic.LoadInt64(&s.handlerXfer),
     TotalConnectionsByRoute:s.handlerByRoute.Copy(),
     RunningWorkers:atomic.LoadInt64(&s.copyOpen),
   }
@@ -249,6 +252,7 @@ func (s *Service) copyGeneric(dst, src *net.TCPConn, xfer metrics.Meter, errs ch
   for {
     nr, er := src.Read(buf)
     xfer.Mark(int64(nr)) // read side is instrumented
+    atomic.AddInt64(&s.handlerXfer, int64(nr))
     if s.rto > 0 { // read deadline on src only
       src.SetReadDeadline(time.Now().Add(s.rto))
     }
