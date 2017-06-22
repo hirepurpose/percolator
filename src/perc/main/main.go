@@ -11,6 +11,7 @@ import (
   "perc/route"
   "perc/service"
   "perc/discovery"
+  "encoding/json"
 )
 
 import _ "net/http/pprof" // register HTTP handlers
@@ -143,14 +144,6 @@ func main() {
     *fWriteTimeout = *fIOTimeout
   }
   
-  if *fMonitor != "" && *fMonitor != "none" {
-    fmt.Printf("-----> Starting monitor and pprof at %v\n", *fMonitor)
-    go func() {
-      http.HandleFunc("/v1/status", func(rsp http.ResponseWriter, req *http.Request){ rsp.WriteHeader(http.StatusOK) })
-      alt.Errorf("* * * Could not monitor: %v", http.ListenAndServe(*fMonitor, nil))
-    }()
-  }
-  
   svc := service.New(service.Config{
     Name:         "percolator",
     Instance:     instance,
@@ -161,6 +154,18 @@ func main() {
     WriteTimeout: *fWriteTimeout,
     Debug:        *fStack,
   })
+  
+  if *fMonitor != "" && *fMonitor != "none" {
+    fmt.Printf("-----> Starting monitor and pprof at %v\n", *fMonitor)
+    go func() {
+      http.HandleFunc("/v1/status", func(rsp http.ResponseWriter, req *http.Request){
+        d, _ := json.Marshal(svc.Stats())
+        rsp.WriteHeader(http.StatusOK)
+        rsp.Write(d)
+      })
+      alt.Errorf("* * * Could not monitor: %v", http.ListenAndServe(*fMonitor, nil))
+    }()
+  }
   
   panic(svc.Run())
 }

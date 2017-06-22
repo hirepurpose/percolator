@@ -20,8 +20,9 @@ import (
 )
 
 var (
-  copyOpen    int64
-  handlerOpen int64
+  copyOpen      int64
+  handlerOpen   int64
+  handlerTotal  int64
 )
 
 var (
@@ -52,9 +53,14 @@ func init() {
   metrics.Register("percolator.proxy.bytes.write.rate", proxyBytesWriteRate)
 }
 
-/**
- * Service config
- */
+// Service stats
+type Stats struct {
+  OpenConnections   int64 `json:"open_connections"`
+  TotalConnections  int64 `json:"total_connections"`
+  RunningWorkers    int64 `json:"running_io_workers"`
+}
+
+// Service config
 type Config struct {
   Name          string
   Instance      string
@@ -66,9 +72,7 @@ type Config struct {
   Debug         bool
 }
 
-/**
- * An API service
- */
+// An API service
 type Service struct {
   name          string
   instance      string
@@ -78,16 +82,21 @@ type Service struct {
   debug         bool
 }
 
-/**
- * Create a new service
- */
+// Create a new service
 func New(conf Config) *Service {
   return &Service{conf.Name, conf.Instance, conf.Discovery, conf.Routes, conf.ConnTimeout, conf.ReadTimeout, conf.WriteTimeout, conf.Debug}
 }
 
-/**
- * Handle requests forever
- */
+// How many connections are we currently handling
+func (s *Service) Stats() Stats {
+  return Stats{
+    OpenConnections:atomic.LoadInt64(&handlerOpen),
+    TotalConnections:atomic.LoadInt64(&handlerTotal),
+    RunningWorkers:atomic.LoadInt64(&copyOpen),
+  }
+}
+
+// Handle requests forever
 func (s *Service) Run() error {
   var err error
   
@@ -130,14 +139,13 @@ func (s *Service) Run() error {
   return <- errs
 }
 
-/**
- * Handle a request for a particular route
- */
+// Handle a request for a particular route
 func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   var b *net.TCPConn
   var err error
   
   atomic.AddInt64(&handlerOpen, 1)
+  atomic.AddInt64(&handlerTotal, 1)
   defer atomic.AddInt64(&handlerOpen, -1)
   
   if debug.VERBOSE {
@@ -219,9 +227,7 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   }
 }
 
-/**
- * Handling copying from a source to destination connection
- */
+// Handling copying from a source to destination connection
 func (s *Service) copyGeneric(dst, src *net.TCPConn, xfer metrics.Meter, errs chan<- error) {
   var copied int64
   
