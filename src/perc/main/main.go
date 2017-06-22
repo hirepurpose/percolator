@@ -14,9 +14,13 @@ import (
   "encoding/json"
 )
 
-import _ "net/http/pprof" // register HTTP handlers
+import (
+  _ "net/http/pprof"
+    "golang.org/x/net/trace"
+)
 
 import (
+  "google.golang.org/grpc"
   "github.com/bww/go-alert"
   "github.com/bww/go-alert/sentry"
   "github.com/bww/go-util/rand"
@@ -62,8 +66,11 @@ func main() {
   
   debug.DEBUG = *fDebug
   debug.VERBOSE = *fVerbose
+  
   if debug.DEBUG {
     fmt.Println("-----> Debugging mode enabled")
+    grpc.EnableTracing = true
+    trace.AuthRequest = func(_ *http.Request)(bool, bool){ return true, true }
   }
   
   hostname, err := os.Hostname()
