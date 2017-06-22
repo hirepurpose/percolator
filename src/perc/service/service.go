@@ -49,9 +49,10 @@ func init() {
 
 // Service stats
 type Stats struct {
-  OpenConnections   int64 `json:"open_connections"`
-  TotalConnections  int64 `json:"total_connections"`
-  RunningWorkers    int64 `json:"running_io_workers"`
+  OpenConnections           int64             `json:"open_connections"`
+  TotalConnections          int64             `json:"total_connections"`
+  TotalConnectionsByRoute   map[string]int64  `json:"total_connections_by_route"`
+  RunningWorkers            int64             `json:"running_io_workers"`
 }
 
 // Service config
@@ -78,14 +79,16 @@ type Service struct {
   copyOpen        int64
   handlerOpen     int64
   handlerTotal    int64
-  handlerByRoute  map[string]*int64
+  handlerByRoute  *cmap
+  handlerUpdate   chan<- keyval
 }
 
 // Create a new service
 func New(conf Config) *Service {
+  m := newCmap()
   return &Service{
     conf.Name, conf.Instance, conf.Discovery, conf.Routes, conf.ConnTimeout, conf.ReadTimeout, conf.WriteTimeout, conf.Debug,
-    0, 0, 0, make(map[string]*int64),
+    0, 0, 0, m, m.Put(),
   }
 }
 
@@ -94,6 +97,7 @@ func (s *Service) Stats() Stats {
   return Stats{
     OpenConnections:atomic.LoadInt64(&s.handlerOpen),
     TotalConnections:atomic.LoadInt64(&s.handlerTotal),
+    TotalConnectionsByRoute:s.handlerByRoute.Copy(),
     RunningWorkers:atomic.LoadInt64(&s.copyOpen),
   }
 }
@@ -185,8 +189,10 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
       alt.Errorf("service: Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
       return
     }
+    s.handlerUpdate <- keyval{backend, 1}
   }else{
     addr = r.NextBackend()
+    s.handlerUpdate <- keyval{addr, 1}
   }
   
   proxyResolveTimer.Update(time.Since(start))
