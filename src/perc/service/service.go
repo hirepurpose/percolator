@@ -82,7 +82,7 @@ type Service struct {
   handlerTotal    int64
   handlerXfer     int64
   handlerByRoute  *cmap
-  handlerUpdate   chan<- keyval
+  handlerUpdate   chan<- entry
 }
 
 // Create a new service
@@ -157,6 +157,13 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   atomic.AddInt64(&s.handlerTotal, 1)
   defer atomic.AddInt64(&s.handlerOpen, -1)
   
+  var caddr string
+  if h, _, err := net.SplitHostPort(c.RemoteAddr().String()); err == nil {
+    caddr = h
+  }else{
+    caddr = "<unknown>"
+  }
+  
   if debug.VERBOSE {
     alt.Debugf("%v: Accepted connection", c.RemoteAddr())
   }
@@ -192,10 +199,10 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
       alt.Errorf("service: Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
       return
     }
-    s.handlerUpdate <- keyval{backend, 1}
+    s.handlerUpdate <- entry{backend, 1, caddr}
   }else{
     addr = r.NextBackend()
-    s.handlerUpdate <- keyval{addr, 1}
+    s.handlerUpdate <- entry{addr, 1, caddr}
   }
   
   proxyResolveTimer.Update(time.Since(start))

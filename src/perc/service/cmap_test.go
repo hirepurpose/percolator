@@ -15,7 +15,7 @@ func TestCmap(t *testing.T) {
   c := m.Put()
   n := int64(100000)
   for i := int64(0); i < n; i++ {
-    c <- keyval{string('A'+ rune(i % 10)), 1}
+    c <- entry{string('A'+ rune(i % 10)), 1, string('L'+ rune(i % 10))}
   }
   
   close(c)

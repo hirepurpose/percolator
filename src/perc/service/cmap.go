@@ -5,16 +5,17 @@ import (
 )
 
 // Counter map key/val
-type keyval struct {
-  Key string
-  Val int64
+type entry struct {
+  Key     string
+  Val     int64
+  Client  string
 }
 
 // Counter map
 type cmap struct {
   sync.RWMutex
   m map[string]int64
-  u chan keyval
+  u chan entry
 }
 
 // Create a counter map
@@ -34,11 +35,11 @@ func (c *cmap) Copy() map[string]int64 {
 }
 
 // Obtain the update channel
-func (c *cmap) Put() chan<- keyval {
+func (c *cmap) Put() chan<- entry {
   c.Lock()
   defer c.Unlock()
   if c.u == nil {
-    c.u = make(chan keyval, 64)
+    c.u = make(chan entry, 64)
     c.update()
   }
   return c.u
