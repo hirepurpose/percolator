@@ -20,12 +20,6 @@ import (
 )
 
 var (
-  copyOpen      int64
-  handlerOpen   int64
-  handlerTotal  int64
-)
-
-var (
   proxyConnRate metrics.Meter
   proxyResolveTimer metrics.Timer
   proxyResolveError metrics.Meter
@@ -74,25 +68,33 @@ type Config struct {
 
 // An API service
 type Service struct {
-  name          string
-  instance      string
-  discovery     discovery.Service
-  routes        []*route.Route
-  cto, rto, wto time.Duration
-  debug         bool
+  name            string
+  instance        string
+  discovery       discovery.Service
+  routes          []*route.Route
+  cto, rto, wto   time.Duration
+  debug           bool
+  //
+  copyOpen        int64
+  handlerOpen     int64
+  handlerTotal    int64
+  handlerByRoute  map[string]*int64
 }
 
 // Create a new service
 func New(conf Config) *Service {
-  return &Service{conf.Name, conf.Instance, conf.Discovery, conf.Routes, conf.ConnTimeout, conf.ReadTimeout, conf.WriteTimeout, conf.Debug}
+  return &Service{
+    conf.Name, conf.Instance, conf.Discovery, conf.Routes, conf.ConnTimeout, conf.ReadTimeout, conf.WriteTimeout, conf.Debug,
+    0, 0, 0, make(map[string]*int64),
+  }
 }
 
 // How many connections are we currently handling
 func (s *Service) Stats() Stats {
   return Stats{
-    OpenConnections:atomic.LoadInt64(&handlerOpen),
-    TotalConnections:atomic.LoadInt64(&handlerTotal),
-    RunningWorkers:atomic.LoadInt64(&copyOpen),
+    OpenConnections:atomic.LoadInt64(&s.handlerOpen),
+    TotalConnections:atomic.LoadInt64(&s.handlerTotal),
+    RunningWorkers:atomic.LoadInt64(&s.copyOpen),
   }
 }
 
@@ -105,7 +107,7 @@ func (s *Service) Run() error {
     signal.Notify(sig, os.Interrupt)
     go func() {
       for range sig {
-        fmt.Printf("service: Currently running handlers: %d, I/O workers: %d\n", atomic.LoadInt64(&handlerOpen), atomic.LoadInt64(&copyOpen))
+        fmt.Printf("service: Currently running handlers: %d, I/O workers: %d\n", atomic.LoadInt64(&s.handlerOpen), atomic.LoadInt64(&s.copyOpen))
       }
     }()
   }
@@ -144,9 +146,9 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   var b *net.TCPConn
   var err error
   
-  atomic.AddInt64(&handlerOpen, 1)
-  atomic.AddInt64(&handlerTotal, 1)
-  defer atomic.AddInt64(&handlerOpen, -1)
+  atomic.AddInt64(&s.handlerOpen, 1)
+  atomic.AddInt64(&s.handlerTotal, 1)
+  defer atomic.AddInt64(&s.handlerOpen, -1)
   
   if debug.VERBOSE {
     alt.Debugf("%v: Accepted connection", c.RemoteAddr())
@@ -231,9 +233,9 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
 func (s *Service) copyGeneric(dst, src *net.TCPConn, xfer metrics.Meter, errs chan<- error) {
   var copied int64
   
-  atomic.AddInt64(&copyOpen, 1)
+  atomic.AddInt64(&s.copyOpen, 1)
   defer func(){
-    atomic.AddInt64(&copyOpen, -1)
+    atomic.AddInt64(&s.copyOpen, -1)
     close(errs)
   }()
   

@@ -30,7 +30,7 @@ LOCAL_TAG 	= hirepurpose/$(PRODUCT_NAME):latest
 REMOTE_TAG 	= $(IMAGE_REPO):$(VERSION)
 
 # test packages
-TEST_PKGS := percolator/service
+TEST_PKGS := perc/service
 
 .PHONY: all web run test stage release
 
