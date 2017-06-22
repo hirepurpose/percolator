@@ -2,22 +2,33 @@ package service
 
 import (
   "fmt"
+  "time"
   "testing"
-  "math/rand"
 )
 
 import (
-  // "github.com/stretchr/testify/assert"
+  "github.com/stretchr/testify/assert"
 )
 
 func TestCmap(t *testing.T) {
   m := newCmap()
   c := m.Put()
-  for i := 0; i < 100000; i++ {
-    v := rand.Int63n(10)
-    c <- keyval{string('A'+ rune(v)), v}
+  n := int64(100000)
+  for i := int64(0); i < n; i++ {
+    c <- keyval{string('A'+ rune(i % 10)), 1}
   }
-  fmt.Println(m.Copy())
-  // assert.Equal()
+  
+  close(c)
+  <- time.After(time.Second)
+  
+  d := m.Copy()
+  fmt.Println(d)
+  
+  var x int64
+  for _, v := range d {
+    x += v
+  }
+  
+  assert.Equal(t, x, n)
 }
 
