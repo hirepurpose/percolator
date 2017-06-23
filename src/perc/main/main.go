@@ -159,7 +159,7 @@ func main() {
     ConnTimeout:  *fConnTimeout,
     ReadTimeout:  *fReadTimeout,
     WriteTimeout: *fWriteTimeout,
-    Debug:        *fStack,
+    Debug:        *fDebug,
   })
   
   if *fMonitor != "" && *fMonitor != "none" {
