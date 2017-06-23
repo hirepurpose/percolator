@@ -142,21 +142,6 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   var b *net.TCPConn
   var err error
   
-  var el trace.EventLog
-  if s.debug {
-    var b string
-    if r.Service {
-      b = r.Backends[0]
-    }else{
-      b = "<next>"
-    }
-    el = trace.NewEventLog("perc.Service", b)
-  }
-  
-  atomic.AddInt64(&s.handlerOpen, 1)
-  atomic.AddInt64(&s.handlerTotal, 1)
-  defer atomic.AddInt64(&s.handlerOpen, -1)
-  
   var caddr string
   if h, _, err := net.SplitHostPort(c.RemoteAddr().String()); err == nil {
     caddr = h
@@ -164,11 +149,27 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     caddr = "<unknown>"
   }
   
+  var tr trace.Trace
+  if s.debug {
+    var b string
+    if r.Service {
+      b = r.Backends[0]
+    }else{
+      b = "<next>"
+    }
+    tr = trace.New("perc.Service", fmt.Sprintf("%v -> %v", caddr, b))
+    defer tr.Finish()
+  }
+  
+  atomic.AddInt64(&s.handlerOpen, 1)
+  atomic.AddInt64(&s.handlerTotal, 1)
+  defer atomic.AddInt64(&s.handlerOpen, -1)
+  
   if debug.VERBOSE {
     alt.Debugf("%v: Accepted connection", c.RemoteAddr())
   }
-  if el != nil {
-    el.Printf("Accepted connection: %v", c.RemoteAddr())
+  if tr != nil {
+    tr.LazyPrintf("Accepted connection: %v", c.RemoteAddr())
   }
   
   defer func() {
@@ -176,8 +177,9 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
       err = c.Close()
       if err != nil {
         alt.Errorf("service: %v: Could not close client: %v\n", c.RemoteAddr(), err)
-        if el != nil {
-          el.Errorf("%v: Could not close client: %v\n", c.RemoteAddr(), err)
+        if tr != nil {
+          tr.LazyPrintf("%v: Could not close client: %v\n", c.RemoteAddr(), err)
+          tr.SetError()
         }
       }
     }
@@ -185,8 +187,9 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
       err = b.Close()
       if err != nil {
         alt.Errorf("service: %v: Could not close backend: %v\n", b.RemoteAddr(), err)
-        if el != nil {
-          el.Errorf("%v: Could not close backend: %v\n", b.RemoteAddr(), err)
+        if tr != nil {
+          tr.LazyPrintf("%v: Could not close backend: %v\n", b.RemoteAddr(), err)
+          tr.SetError()
         }
       }
     }
@@ -199,8 +202,9 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     if s.discovery == nil {
       proxyResolveError.Mark(1)
       alt.Errorf("service: Discovery not available")
-      if el != nil {
-        el.Errorf("Discovery not available")
+      if tr != nil {
+        tr.LazyPrintf("Discovery not available")
+        tr.SetError()
       }
       return
     }
@@ -209,8 +213,9 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     if err != nil {
       proxyResolveError.Mark(1)
       alt.Errorf("service: Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
-      if el != nil {
-        el.Errorf("Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
+      if tr != nil {
+        tr.LazyPrintf("Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
+        tr.SetError()
       }
       return
     }
@@ -225,8 +230,8 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   if debug.VERBOSE {
     alt.Debugf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
   }
-  if el != nil {
-    el.Printf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
+  if tr != nil {
+    tr.LazyPrintf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
   }
   
   start = time.Now()
@@ -236,8 +241,9 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   if err != nil {
     proxyConnError.Mark(1)
     alt.Errorf("service: %v: Could not connect to backend: %v (%v): %v", c.RemoteAddr(), addr, backend, err)
-    if el != nil {
-      el.Errorf("%v: Could not connect to backend: %v (%v): %v", c.RemoteAddr(), addr, backend, err)
+    if tr != nil {
+      tr.LazyPrintf("%v: Could not connect to backend: %v (%v): %v", c.RemoteAddr(), addr, backend, err)
+      tr.SetError()
     }
     return
   }
@@ -248,8 +254,8 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   rerrs := make(chan error, 1)
   werrs := make(chan error, 1)
   
-  go s.copyGeneric(c, b, el, proxyBytesReadRate, rerrs)
-  go s.copyGeneric(b, c, el, proxyBytesWriteRate, werrs)
+  go s.copyGeneric(c, b, tr, proxyBytesReadRate, rerrs)
+  go s.copyGeneric(b, c, tr, proxyBytesWriteRate, werrs)
   
   var ok bool
   select {
@@ -259,21 +265,22 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   if ok && err != io.EOF {
     proxyXferError.Mark(1)
     alt.Errorf("service: %v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
-    if el != nil {
-      el.Errorf("%v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
+    if tr != nil {
+      tr.LazyPrintf("%v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
+      tr.SetError()
     }
   }
   
   if debug.VERBOSE {
     alt.Debugf("%v: Connection will end: %v (%v)", c.RemoteAddr(), addr, backend)
   }
-  if el != nil {
-    el.Printf("%v: Connection will end: %v (%v)", c.RemoteAddr(), addr, backend)
+  if tr != nil {
+    tr.LazyPrintf("%v: Connection will end: %v (%v)", c.RemoteAddr(), addr, backend)
   }
 }
 
 // Handling copying from a source to destination connection
-func (s *Service) copyGeneric(dst, src *net.TCPConn, el trace.EventLog, xfer metrics.Meter, errs chan<- error) {
+func (s *Service) copyGeneric(dst, src *net.TCPConn, tr trace.Trace, xfer metrics.Meter, errs chan<- error) {
   var copied int64
   
   atomic.AddInt64(&s.copyOpen, 1)
@@ -318,7 +325,7 @@ func (s *Service) copyGeneric(dst, src *net.TCPConn, el trace.EventLog, xfer met
   if debug.VERBOSE && copied > 0 {
     alt.Debugf("%v -> %v: copied %d", src.RemoteAddr(), dst.RemoteAddr(), copied)
   }
-  if el != nil {
-    el.Printf("%v -> %v: copied %d", src.RemoteAddr(), dst.RemoteAddr(), copied)
+  if tr != nil {
+    tr.LazyPrintf("%v -> %v: copied %d", src.RemoteAddr(), dst.RemoteAddr(), copied)
   }
 }
