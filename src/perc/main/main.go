@@ -23,6 +23,7 @@ import (
   "google.golang.org/grpc"
   "github.com/bww/go-alert"
   "github.com/bww/go-alert/sentry"
+  "github.com/bww/go-util/env"
   "github.com/bww/go-util/rand"
   "github.com/bww/go-util/debug"
   "github.com/bww/go-metrics-influxdb"
@@ -33,6 +34,7 @@ import (
  * You know what it does
  */
 func main() {
+  env.Load(os.Getenv("ENVFILE"), ".env")
   var proxyRoutes flagList
   
   cmdline       := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
