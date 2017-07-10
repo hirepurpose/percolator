@@ -240,7 +240,7 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   p, err := d.Dial("tcp", addr)
   if err != nil {
     proxyConnError.Mark(1)
-    alt.Errorf("service: %v: Could not connect to backend: %v (%v): %v", c.RemoteAddr(), addr, backend, err)
+    alt.Debugf("service: %v: Could not connect to backend: %v (%v): %v", c.RemoteAddr(), addr, backend, err)
     if tr != nil {
       tr.LazyPrintf("%v: Could not connect to backend: %v (%v): %v", c.RemoteAddr(), addr, backend, err)
       tr.SetError()
@@ -264,7 +264,7 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   }
   if ok && err != io.EOF {
     proxyXferError.Mark(1)
-    alt.Errorf("service: %v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
+    alt.Debugf("service: %v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
     if tr != nil {
       tr.LazyPrintf("%v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
       tr.SetError()
