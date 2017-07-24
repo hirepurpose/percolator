@@ -36,6 +36,8 @@ func init() {
   metrics.Register("percolator.proxy.conn.error", proxyConnError)
   proxyXferError = metrics.NewMeter()
   metrics.Register("percolator.proxy.xfer.error", proxyXferError)
+  proxyResolveError = metrics.NewTimer()
+  metrics.Register("percolator.proxy.resolve.error", proxyResolveError)
   proxyResolveTimer = metrics.NewTimer()
   metrics.Register("percolator.proxy.resolve.latency", proxyResolveTimer)
   proxyLatencyTimer = metrics.NewTimer()
