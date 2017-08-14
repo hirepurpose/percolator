@@ -203,7 +203,9 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   if r.Service {
     if s.discovery == nil {
       proxyResolveError.Mark(1)
-      alt.Errorf("service: Discovery not available")
+      if debug.VERBOSE {
+        alt.Errorf("service: Discovery not available")
+      }
       if tr != nil {
         tr.LazyPrintf("Discovery not available")
         tr.SetError()
@@ -214,7 +216,9 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
     addr, err = s.discovery.LookupProvider(backend)
     if err != nil {
       proxyResolveError.Mark(1)
-      alt.Errorf("service: Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
+      if debug.VERBOSE {
+        alt.Errorf("service: Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
+      }
       if tr != nil {
         tr.LazyPrintf("Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
         tr.SetError()
@@ -242,7 +246,9 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   p, err := d.Dial("tcp", addr)
   if err != nil {
     proxyConnError.Mark(1)
-    alt.Debugf("service: %v: Could not connect to backend: %v (%v): %v", c.RemoteAddr(), addr, backend, err)
+    if debug.VERBOSE {
+      alt.Debugf("service: %v: Could not connect to backend: %v (%v): %v", c.RemoteAddr(), addr, backend, err)
+    }
     if tr != nil {
       tr.LazyPrintf("%v: Could not connect to backend: %v (%v): %v", c.RemoteAddr(), addr, backend, err)
       tr.SetError()
@@ -266,7 +272,9 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   }
   if ok && err != io.EOF {
     proxyXferError.Mark(1)
-    alt.Debugf("service: %v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
+    if debug.VERBOSE {
+      alt.Debugf("service: %v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
+    }
     if tr != nil {
       tr.LazyPrintf("%v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
       tr.SetError()
