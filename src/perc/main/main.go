@@ -117,9 +117,12 @@ func main() {
     go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, time.Second * 5, fmt.Sprintf("http://%s", *fInflux), "hirepurpose", "", "", map[string]string{"environ": *fEnviron, "host": hostname, "instance": instance})
   }
   
-  disc, err := discovery.New(*fDomain, *fDiscovery)
-  if err != nil {
-    panic(err)
+  var disc discovery.Service
+  if *fDiscovery != "" && *fDiscovery != "none" {
+    disc, err = discovery.New(*fDomain, *fDiscovery)
+    if err != nil {
+      panic(err)
+    }
   }
   
   if *fCacheTimeout > 0 {
