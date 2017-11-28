@@ -17,6 +17,18 @@ var (
  */
 type Zone []string
 
+// Parse a zone
+func parseZone(s string) (Zone, error) {
+  z := strings.Split(strings.TrimSpace(s), ".")
+  if len(z) < 1 {
+    return nil, ErrMalformed
+  }
+  for i, e := range z {
+    z[i] = strings.TrimSpace(e)
+  }
+  return z, nil
+}
+
 /**
  * Display name
  */
@@ -58,6 +70,24 @@ func (z Zone) Rack() string {
 }
 
 /**
+ * Lookup the zone's hosts for the provided domain
+ */
+func (z Zone) Hosts(d string) ([]string, error) {
+  
+  r, err := LookupTXT(d, z)
+  if err != nil {
+    return nil, err
+  }
+  
+  h := strings.Split(r, ",")
+  for i, e := range h {
+    h[i] = strings.TrimSpace(e)
+  }
+  
+  return h, nil
+}
+
+/**
  * Defines a discovery provider
  */
 type Provider struct {
@@ -82,9 +112,9 @@ func Parse(s string) (*Provider, error) {
   var zones []Zone
   p := strings.Split(s, ",")
   for _, e := range p {
-    z := strings.Split(strings.TrimSpace(e), ".")
-    if len(z) < 1 {
-      return nil, ErrMalformed
+    z, err := parseZone(e)
+    if err != nil {
+      return nil, err
     }
     zones = append(zones, z)
   }
