@@ -3,6 +3,7 @@ package route
 import (
   "fmt"
   "sync"
+  "sync/atomic"
   "strings"
   "unicode"
 )
@@ -20,22 +21,32 @@ const (
   paramDelimEsc     = '\\'
 )
 
+// A syntax error
+type syntaxError error
+
+// Is it a syntax error?
+func IsSyntaxError(e error) bool {
+  _, ok := e.(syntaxError)
+  return ok
+}
+
 // A route maps a port to a backend
 type Route struct {
   sync.Mutex
   Listen    string
   Backends  []Backend
   Service   bool
-  index     int
+  index     uint64
 }
 
 // Parse a route
 func Parse(s string) (*Route, error) {
   var err error
+  p := s
   
   n := strings.IndexRune(s, '=')
   if n < 0 {
-    return nil, fmt.Errorf("Invalid route; expected <listen>=<backend>[,...,<backendN>] in: %v", s)
+    return nil, syntaxError(fmt.Errorf("Invalid route; expected <listen>=<backend>[,...,<backendN>] in: %v", p))
   }
   
   listen := strings.TrimSpace(s[:n])
@@ -45,34 +56,62 @@ func Parse(s string) (*Route, error) {
   var backends []Backend
   for i := 0; len(s) > 0; i++ {
     var b Backend
+    
+    if i > 0 {
+      if s[0] != ',' {
+        return nil, syntaxError(fmt.Errorf("Missing ',' in backend list"))
+      }else{
+        _, s = scan.White(s[1:])
+      }
+    }
+    
     b, s, err = parseBackend(s)
     if err != nil {
       return nil, err
     }
+    if b.Name == "" {
+      return nil, syntaxError(fmt.Errorf("Backend is empty"))
+    }
+    
+    backends = append(backends, b)
+    
     v := strings.IndexRune(b.Name, ':') < 0
     if i == 0 {
       service = v
     }else if service != v {
-      return nil, fmt.Errorf("Cannot mix host and service backends in the same route")
+      return nil, syntaxError(fmt.Errorf("Cannot mix host and service backends in the same route"))
     }
-    backends = append(backends, b)
+    
+    _, s = scan.White(s)
+  }
+  
+  if len(backends) < 1 {
+    return nil, syntaxError(fmt.Errorf("No backends defined in route: %v", p))
+  }
+  if service && len(backends) > 1 {
+    return nil, fmt.Errorf("Only one service backend may be defined in a single route: %v", p)
   }
   
   return &Route{sync.Mutex{}, listen, backends, service, 0}, nil
 }
 
 // Obtain the next backend in the rotation
-func (r *Route) NextBackend() string {
+func (r *Route) NextBackend() Backend {
   if len(r.Backends) == 1 {
     return r.Backends[0]
   }
-  r.index++
-  return r.Backends[r.index % len(r.Backends)]
+  n := atomic.AddUint64(&r.index, 1)
+  return r.Backends[int(n) % len(r.Backends)]
 }
 
 // Stringer
 func (r Route) String() string {
-  return r.Listen +" -> "+ strings.Join(r.Backends, ", ")
+  var b string
+  for i, e := range r.Backends {
+    if i > 0 { b += ", " }
+    b += e.String()
+  }
+  return r.Listen +" -> "+ b
 }
 
 // A backend configuration
@@ -81,12 +120,25 @@ type Backend struct {
   Params  map[string]string
 }
 
+// Stringer
+func (b Backend) String() string {
+  s := b.Name
+  if len(b.Params) > 0 {
+    s += "("
+    for k, v := range b.Params {
+      s += k +"='"+ scan.Escape(v, paramDelimQuote, paramDelimEsc) +"'"
+    }
+    s += ")"
+  }
+  return s
+}
+
 // Parse a backend in the form: host|service[{key1=value1[,...]}]
 func parseBackend(s string) (Backend, string, error) {
   var err error
   
   n := strings.IndexFunc(s, func(r rune) bool {
-    return unicode.IsSpace(r) || r == paramDelimOpen
+    return unicode.IsSpace(r) || r == paramDelimOpen || r == paramDelimList
   })
   if n < 0 {
     return Backend{Name:s}, "", nil
@@ -109,7 +161,7 @@ func parseBackend(s string) (Backend, string, error) {
 // Parse parameters in the form: (key1=value1[,...])
 func parseParams(s string) (map[string]string, string, error) {
   if len(s) < 1 || s[0] != paramDelimOpen {
-    return nil, "", fmt.Errorf("Invalid parameters; expected '%v', got '%v'", string(paramDelimOpen), string(s[0]))
+    return nil, "", syntaxError(fmt.Errorf("Invalid parameters; expected '%v', got '%v'", string(paramDelimOpen), string(s[0])))
   }else{
     s = s[1:]
   }
@@ -119,9 +171,10 @@ func parseParams(s string) (map[string]string, string, error) {
     _, s = scan.White(s)
     
     if len(s) < 1 {
-      return nil, "", fmt.Errorf("Unexpected end of parameters")
+      return nil, "", syntaxError(fmt.Errorf("Unexpected end of parameters"))
     }
     if s[0] == paramDelimClose {
+      s = s[1:]
       break
     }
     if s[0] == paramDelimList {
@@ -154,7 +207,7 @@ func parseKeyValue(s string) (string, string, string, error) {
   
   _, s = scan.White(s)
   if len(s) < 1 || s[0] != paramDelimAssign {
-    return "", "", "", fmt.Errorf("Expected '=', got '%v'", string(s[0]))
+    return "", "", "", syntaxError(fmt.Errorf("Expected '=', got '%v'", string(s[0])))
   }else{
     s = s[1:]
   }

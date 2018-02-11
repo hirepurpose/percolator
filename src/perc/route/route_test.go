@@ -31,6 +31,13 @@ func testParseBackend(t *testing.T, in, en string, ep map[string]string, eerr er
 
 func TestParseRoute(t *testing.T) {
   testParseRoute(t, `:9000=upstream`, &Route{Listen:":9000", Backends:[]Backend{{Name:"upstream"}}, Service:true}, nil)
+  testParseRoute(t, `:9000=host:1234,other:5678`, &Route{Listen:":9000", Backends:[]Backend{{Name:"host:1234"},{Name:"other:5678"}}, Service:false}, nil)
+  testParseRoute(t, `:9000=host:1234, other:5678`, &Route{Listen:":9000", Backends:[]Backend{{Name:"host:1234"},{Name:"other:5678"}}, Service:false}, nil)
+  testParseRoute(t, `:9000=upstream(tls='true')`, &Route{Listen:":9000", Backends:[]Backend{{Name:"upstream", Params:map[string]string{"tls": "true"}}}, Service:true}, nil)
+  testParseRoute(t, `:9000 = upstream ( tls = 'true' )`, &Route{Listen:":9000", Backends:[]Backend{{Name:"upstream", Params:map[string]string{"tls": "true"}}}, Service:true}, nil)
+  testParseRoute(t, `:9000=host:1234(tls='true'),other:1234(tls='false')`, &Route{Listen:":9000", Backends:[]Backend{{Name:"host:1234", Params:map[string]string{"tls": "true"}}, {Name:"other:1234", Params:map[string]string{"tls": "false"}}}, Service:false}, nil)
+  testParseRoute(t, `:9000=host:1234(tls='true') other:1234(tls='false')`, nil, syntaxError(fmt.Errorf("Missing ',' in backend list")))
+  testParseRoute(t, `:9000=host:1234(tls='true'),`, nil, syntaxError(fmt.Errorf("Backend is empty")))
 }
 
 func testParseRoute(t *testing.T, in string, er *Route, eerr error) bool {
@@ -39,6 +46,6 @@ func testParseRoute(t *testing.T, in string, er *Route, eerr error) bool {
     fmt.Printf("%v -> %v\n", in, aerr)
     return assert.Equal(t, eerr, aerr, "Errors do not match")
   }
-  res := true
+  fmt.Printf("%v -> %v\n", in, ar)
   return assert.Equal(t, er, ar, "Routes do not match")
 }
