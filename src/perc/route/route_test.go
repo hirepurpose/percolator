@@ -14,6 +14,10 @@ func TestParseBackend(t *testing.T) {
   testParseBackend(t, `hello/123:456 (key_name='Value', another='Check it')`, "hello/123:456", map[string]string{"key_name": "Value", "another": "Check it"}, nil)
   testParseBackend(t, `hello/123:456( key_name='Value', another='Check it' )`, "hello/123:456", map[string]string{"key_name": "Value", "another": "Check it"}, nil)
   testParseBackend(t, `hello/123:456 ( key_name='Value', another='Check it' ) trailing stuff, which we ignore`, "hello/123:456", map[string]string{"key_name": "Value", "another": "Check it"}, nil)
+  testParseBackend(t, `hello(flag)`, "hello", map[string]string{"flag": ""}, nil)
+  testParseBackend(t, `hello(flag,other)`, "hello", map[string]string{"flag": "", "other": ""}, nil)
+  testParseBackend(t, `hello(flag = 'Value', other)`, "hello", map[string]string{"flag": "Value", "other": ""}, nil)
+  testParseBackend(t, `hello(flag, other = 'Value')`, "hello", map[string]string{"flag": "", "other": "Value"}, nil)
 }
 
 func testParseBackend(t *testing.T, in, en string, ep map[string]string, eerr error) bool {

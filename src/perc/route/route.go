@@ -206,7 +206,19 @@ func parseKeyValue(s string) (string, string, string, error) {
   }
   
   _, s = scan.White(s)
-  if len(s) < 1 || s[0] != paramDelimAssign {
+  if len(s) < 1 {
+    return "", "", "", syntaxError(fmt.Errorf("Unexpected end of input"))
+  }
+  
+  // flag style; key with no value
+  if s[0] == paramDelimClose {
+    return key, "", s, nil
+  }else if s[0] == paramDelimList {
+    return key, "", s, nil
+  }
+  
+  // otherwise next value must 
+  if s[0] != paramDelimAssign {
     return "", "", "", syntaxError(fmt.Errorf("Expected '=', got '%v'", string(s[0])))
   }else{
     s = s[1:]
