@@ -24,38 +24,38 @@ const (
 type Route struct {
   sync.Mutex
   Listen    string
-  Backends  []string
+  Backends  []Backend
   Service   bool
   index     int
 }
 
 // Parse a route
 func Parse(s string) (*Route, error) {
+  var err error
   
-  p := strings.Split(s, "=")
-  if len(p) != 2 {
+  n := strings.IndexRune(s, '=')
+  if n < 0 {
     return nil, fmt.Errorf("Invalid route; expected <listen>=<backend>[,...,<backendN>] in: %v", s)
   }
   
-  listen := p[0]
-  var backends []string
+  listen := strings.TrimSpace(s[:n])
+  _, s = scan.White(s[n+1:])
+  
   var service bool
-  
-  for _, e := range strings.Split(p[1], ",") {
-    e = strings.TrimSpace(e)
-    backends = append(backends, e)
-    if strings.Index(e, ":") < 0 {
-      service = true
-    }else if service {
-      return nil, fmt.Errorf("Cannot mix service and host backend in a single route: %v", s)
+  var backends []Backend
+  for i := 0; len(s) > 0; i++ {
+    var b Backend
+    b, s, err = parseBackend(s)
+    if err != nil {
+      return nil, err
     }
-  }
-  
-  if len(backends) < 1 {
-    return nil, fmt.Errorf("No backends defined in route: %v", s)
-  }
-  if service && len(backends) > 1 {
-    return nil, fmt.Errorf("Only one service backend may be defined in a single route: %v", s)
+    v := strings.IndexRune(b.Name, ':') < 0
+    if i == 0 {
+      service = v
+    }else if service != v {
+      return nil, fmt.Errorf("Cannot mix host and service backends in the same route")
+    }
+    backends = append(backends, b)
   }
   
   return &Route{sync.Mutex{}, listen, backends, service, 0}, nil
@@ -82,14 +82,14 @@ type Backend struct {
 }
 
 // Parse a backend in the form: host|service[{key1=value1[,...]}]
-func parseBackend(s string) (*Backend, error) {
+func parseBackend(s string) (Backend, string, error) {
   var err error
   
   n := strings.IndexFunc(s, func(r rune) bool {
     return unicode.IsSpace(r) || r == paramDelimOpen
   })
   if n < 0 {
-    return &Backend{Name:s}, nil
+    return Backend{Name:s}, "", nil
   }
   
   name := s[:n]
@@ -97,19 +97,19 @@ func parseBackend(s string) (*Backend, error) {
   
   var params map[string]string
   if len(s) > 0 && s[0] == paramDelimOpen {
-    params, err = parseParams(s)
+    params, s, err = parseParams(s)
     if err != nil {
-      return nil, err
+      return Backend{}, "", err
     }
   }
   
-  return &Backend{name, params}, nil
+  return Backend{name, params}, s, nil
 }
 
 // Parse parameters in the form: (key1=value1[,...])
-func parseParams(s string) (map[string]string, error) {
+func parseParams(s string) (map[string]string, string, error) {
   if len(s) < 1 || s[0] != paramDelimOpen {
-    return nil, fmt.Errorf("Invalid parameters; expected '%v', got '%v'", string(paramDelimOpen), string(s[0]))
+    return nil, "", fmt.Errorf("Invalid parameters; expected '%v', got '%v'", string(paramDelimOpen), string(s[0]))
   }else{
     s = s[1:]
   }
@@ -119,7 +119,7 @@ func parseParams(s string) (map[string]string, error) {
     _, s = scan.White(s)
     
     if len(s) < 1 {
-      return nil, fmt.Errorf("Unexpected end of parameters")
+      return nil, "", fmt.Errorf("Unexpected end of parameters")
     }
     if s[0] == paramDelimClose {
       break
@@ -133,13 +133,13 @@ func parseParams(s string) (map[string]string, error) {
     var err error
     k, v, s, err = parseKeyValue(s)
     if err != nil {
-      return nil, err
+      return nil, "", err
     }
     
     params[k] = v
   }
   
-  return params, nil
+  return params, s, nil
 }
 
 // Parse a key/value pair in the form: (key1='value1')
