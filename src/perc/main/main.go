@@ -30,9 +30,7 @@ import (
   "github.com/rcrowley/go-metrics"
 )
 
-/**
- * You know what it does
- */
+// You know what it does
 func main() {
   env.Load(os.Getenv("ENVFILE"), ".env")
   var proxyRoutes flagList
@@ -182,16 +180,12 @@ func main() {
   panic(svc.Run())
 }
 
-/**
- * String to bool
- */
+// String to bool
 func strToBool(s string) bool {
   return strings.EqualFold(s, "t") || strings.EqualFold(s, "true") || strings.EqualFold(s, "y") || strings.EqualFold(s, "yes")
 }
 
-/**
- * String to duration
- */
+// String to duration
 func strToDur(s string) time.Duration {
   d, err := time.ParseDuration(s)
   if err != nil {
@@ -200,9 +194,7 @@ func strToDur(s string) time.Duration {
   return d
 }
 
-/**
- * Return the first non-empty string from those provided
- */
+// Return the first non-empty string from those provided
 func coalesce(v... string) string {
   for _, e := range v {
     if e != "" {
@@ -212,22 +204,16 @@ func coalesce(v... string) string {
   return ""
 }
 
-/**
- * Flag string list
- */
+// Flag string list
 type flagList []string
 
-/**
- * Set a flag
- */
+// Set a flag
 func (s *flagList) Set(v string) error {
   *s = append(*s, v)
   return nil
 }
 
-/**
- * Describe
- */
+// Describe
 func (s *flagList) String() string {
   return fmt.Sprintf("%+v", *s)
 }
