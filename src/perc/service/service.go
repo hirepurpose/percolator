@@ -190,6 +190,16 @@ func (s *Service) handle(r *route.Route, c net.Conn) {
         }
       }
     }
+    if p != nil {
+      err = p.Close()
+      if err != nil {
+        alt.Errorf("service: %v: Could not close backend: %v\n", p.RemoteAddr(), err)
+        if tr != nil {
+          tr.LazyPrintf("%v: Could not close backend: %v\n", p.RemoteAddr(), err)
+          tr.SetError()
+        }
+      }
+    }
   }()
   
   start := time.Now()
@@ -233,19 +243,6 @@ func (s *Service) handle(r *route.Route, c net.Conn) {
   if debug.VERBOSE {
     alt.Debugf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
   }
-  
-  defer func() {
-    if p != nil {
-      err = p.Close()
-      if err != nil {
-        alt.Errorf("service: %v: Could not close backend: %v\n", p.RemoteAddr(), err)
-        if tr != nil {
-          tr.LazyPrintf("%v: Could not close backend: %v\n", p.RemoteAddr(), err)
-          tr.SetError()
-        }
-      }
-    }
-  }()
   
   start = time.Now()
   
