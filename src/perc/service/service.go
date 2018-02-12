@@ -5,10 +5,11 @@ import (
   "fmt"
   "net"
   "time"
-  "strings"
+  "crypto/tls"
+  "sync/atomic"
+  
   "perc/route"
   "perc/discovery"
-  "sync/atomic"
 )
 
 import (
@@ -16,6 +17,11 @@ import (
   "github.com/bww/go-alert"
   "github.com/bww/go-util/debug"
   "github.com/rcrowley/go-metrics"
+)
+
+const (
+  paramTLS  = "tls"
+  paramHTTP = "http"
 )
 
 var (
@@ -121,7 +127,7 @@ func (s *Service) Run() error {
   errs := make(chan error)
   for i, e := range l {
     r := s.routes[i]
-    fmt.Printf("-----> Serving requests on: %v\n", r)
+    fmt.Printf("-----> Serving requests on: %s\n", r.Detail())
     go func(r *route.Route, l net.Listener){
       for {
         conn, err := l.Accept()
@@ -141,7 +147,7 @@ func (s *Service) Run() error {
 
 // Handle a request for a particular route
 func (s *Service) handle(r *route.Route, c *net.TCPConn) {
-  var b *net.TCPConn
+  var p net.Conn
   var err error
   
   var caddr string
@@ -155,7 +161,7 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   if s.debug {
     var b string
     if r.Service {
-      b = r.Backends[0]
+      b = r.Any().String()
     }else{
       b = "<next>"
     }
@@ -185,21 +191,12 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
         }
       }
     }
-    if b != nil {
-      err = b.Close()
-      if err != nil {
-        alt.Errorf("service: %v: Could not close backend: %v\n", b.RemoteAddr(), err)
-        if tr != nil {
-          tr.LazyPrintf("%v: Could not close backend: %v\n", b.RemoteAddr(), err)
-          tr.SetError()
-        }
-      }
-    }
   }()
   
   start := time.Now()
   
-  var backend, addr string
+  var addr string
+  var backend route.Backend
   if r.Service {
     if s.discovery == nil {
       proxyResolveError.Mark(1)
@@ -212,22 +209,23 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
       }
       return
     }
-    backend = r.Backends[0]
-    addr, err = s.discovery.LookupProvider(backend)
+    backend = r.Any()
+    addr, err = s.discovery.LookupProvider(backend.Addr)
     if err != nil {
       proxyResolveError.Mark(1)
       if debug.VERBOSE {
-        alt.Errorf("service: Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
+        alt.Errorf("service: Could not discover service: %v: %v", r.String(), err)
       }
       if tr != nil {
-        tr.LazyPrintf("Could not discover service: %v: %v", strings.Join(r.Backends, ", "), err)
+        tr.LazyPrintf("Could not discover service: %v: %v", r.String(), err)
         tr.SetError()
       }
       return
     }
-    s.handlerUpdate <- entry{backend, 1, caddr}
+    s.handlerUpdate <- entry{backend.String(), 1, caddr}
   }else{
-    addr = r.NextBackend()
+    backend = r.Next()
+    addr = backend.Addr
     s.handlerUpdate <- entry{addr, 1, caddr}
   }
   
@@ -236,14 +234,34 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   if debug.VERBOSE {
     alt.Debugf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
   }
-  if tr != nil {
-    tr.LazyPrintf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
-  }
+  
+  defer func() {
+    if p != nil {
+      err = p.Close()
+      if err != nil {
+        alt.Errorf("service: %v: Could not close backend: %v\n", p.RemoteAddr(), err)
+        if tr != nil {
+          tr.LazyPrintf("%v: Could not close backend: %v\n", p.RemoteAddr(), err)
+          tr.SetError()
+        }
+      }
+    }
+  }()
   
   start = time.Now()
   
-  d := net.Dialer{Timeout:s.cto}
-  p, err := d.Dial("tcp", addr)
+  d := &net.Dialer{Timeout:s.cto}
+  if name, ok := backend.Params[paramTLS]; ok {
+    if tr != nil {
+      tr.LazyPrintf("%v: Proxying to backend: %v (%v) via TLS (SNI: %v)", c.RemoteAddr(), addr, backend, name)
+    }
+    p, err = tls.DialWithDialer(d, "tcp", addr, &tls.Config{ServerName:name})
+  }else{
+    if tr != nil {
+      tr.LazyPrintf("%v: Proxying to backend: %v (%v)", c.RemoteAddr(), addr, backend)
+    }
+    p, err = d.Dial("tcp", addr)
+  }
   if err != nil {
     proxyConnError.Mark(1)
     if debug.VERBOSE {
@@ -258,12 +276,11 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   
   proxyLatencyTimer.Update(time.Since(start))
   
-  b = p.(*net.TCPConn)
   rerrs := make(chan error, 1)
   werrs := make(chan error, 1)
   
-  go s.copyGeneric(c, b, tr, proxyBytesReadRate, rerrs)
-  go s.copyGeneric(b, c, tr, proxyBytesWriteRate, werrs)
+  go s.copyGeneric(c, p, tr, proxyBytesReadRate, rerrs)
+  go s.copyGeneric(p, c, tr, proxyBytesWriteRate, werrs)
   
   var ok bool
   select {
@@ -273,10 +290,10 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
   if ok && err != io.EOF {
     proxyXferError.Mark(1)
     if debug.VERBOSE {
-      alt.Debugf("service: %v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
+      alt.Debugf("service: %v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), p.RemoteAddr(), backend, err)
     }
     if tr != nil {
-      tr.LazyPrintf("%v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), b.RemoteAddr(), backend, err)
+      tr.LazyPrintf("%v -> %v (%v): Could not proxy: %v\n", c.RemoteAddr(), p.RemoteAddr(), backend, err)
       tr.SetError()
     }
   }
@@ -290,7 +307,7 @@ func (s *Service) handle(r *route.Route, c *net.TCPConn) {
 }
 
 // Handling copying from a source to destination connection
-func (s *Service) copyGeneric(dst, src *net.TCPConn, tr trace.Trace, xfer metrics.Meter, errs chan<- error) {
+func (s *Service) copyGeneric(dst, src net.Conn, tr trace.Trace, xfer metrics.Meter, errs chan<- error) {
   var copied int64
   
   atomic.AddInt64(&s.copyOpen, 1)

@@ -36,7 +36,7 @@ type Route struct {
   Listen    string
   Backends  []Backend
   Service   bool
-  index     uint64
+  index     int64
 }
 
 // Parse a route
@@ -69,13 +69,13 @@ func Parse(s string) (*Route, error) {
     if err != nil {
       return nil, err
     }
-    if b.Name == "" {
+    if b.Addr == "" {
       return nil, syntaxError(fmt.Errorf("Backend is empty"))
     }
     
     backends = append(backends, b)
     
-    v := strings.IndexRune(b.Name, ':') < 0
+    v := strings.IndexRune(b.Addr, ':') < 0
     if i == 0 {
       service = v
     }else if service != v {
@@ -95,13 +95,29 @@ func Parse(s string) (*Route, error) {
   return &Route{sync.Mutex{}, listen, backends, service, 0}, nil
 }
 
-// Obtain the next backend in the rotation
-func (r *Route) NextBackend() Backend {
+// Increment and obtain the next index in the backend rotation
+func (r *Route) Index() int64 {
+  return atomic.AddInt64(&r.index, 1)
+}
+
+// Obtain any backend. Panics if there are none.
+func (r *Route) Any() Backend {
+  return r.Backends[0]
+}
+
+// Obtain the backend for the next index in the rotation. This is effectively: r.Backend(r.Index())
+func (r *Route) Next() Backend {
+  return r.Backend(r.Index())
+}
+
+// Obtain the backend at the provided rotation index
+func (r *Route) Backend(n int64) Backend {
   if len(r.Backends) == 1 {
     return r.Backends[0]
+  }else{
+    if n < 0 { n = -n }
+    return r.Backends[int(n) % len(r.Backends)]
   }
-  n := atomic.AddUint64(&r.index, 1)
-  return r.Backends[int(n) % len(r.Backends)]
 }
 
 // Stringer
@@ -114,19 +130,37 @@ func (r Route) String() string {
   return r.Listen +" -> "+ b
 }
 
+// Detail stringer
+func (r Route) Detail() string {
+  var b string
+  for i, e := range r.Backends {
+    if i > 0 { b += ", " }
+    b += e.Detail()
+  }
+  return r.Listen +" -> "+ b
+}
+
 // A backend configuration
 type Backend struct {
-  Name    string
+  Addr    string
   Params  map[string]string
 }
 
 // Stringer
 func (b Backend) String() string {
-  s := b.Name
+  return b.Addr
+}
+
+// Detail stringer
+func (b Backend) Detail() string {
+  s := b.Addr
   if len(b.Params) > 0 {
     s += "("
     for k, v := range b.Params {
-      s += k +"='"+ scan.Escape(v, paramDelimQuote, paramDelimEsc) +"'"
+      s += k
+      if v != "" {
+        s += "='"+ scan.Escape(v, paramDelimQuote, paramDelimEsc) +"'"
+      }
     }
     s += ")"
   }
@@ -141,7 +175,7 @@ func parseBackend(s string) (Backend, string, error) {
     return unicode.IsSpace(r) || r == paramDelimOpen || r == paramDelimList
   })
   if n < 0 {
-    return Backend{Name:s}, "", nil
+    return Backend{Addr:s}, "", nil
   }
   
   name := s[:n]
