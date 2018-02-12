@@ -97,7 +97,12 @@ func Parse(s string) (*Route, error) {
 
 // Increment and obtain the next index in the backend rotation
 func (r *Route) Index() int64 {
-  return atomic.AddInt64(&r.index, 1)
+  v := atomic.AddInt64(&r.index, 1)
+  if v < 0 {
+    v = 0
+    atomic.StoreInt64(&r.index, v)
+  }
+  return v
 }
 
 // Obtain any backend. Panics if there are none.
@@ -115,7 +120,7 @@ func (r *Route) Backend(n int64) Backend {
   if len(r.Backends) == 1 {
     return r.Backends[0]
   }else{
-    if n < 0 { n = -n }
+    if n < 0 { n = 0 }
     return r.Backends[int(n) % len(r.Backends)]
   }
 }
