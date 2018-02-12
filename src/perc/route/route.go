@@ -95,14 +95,9 @@ func Parse(s string) (*Route, error) {
   return &Route{sync.Mutex{}, listen, backends, service, 0}, nil
 }
 
-// Increment and obtain the next index in the backend rotation
+// Increment and obtain the next index in the backend rotation. We just let this overflow and account for it in Backend().
 func (r *Route) Index() int64 {
-  v := atomic.AddInt64(&r.index, 1)
-  if v < 0 {
-    v = 0
-    atomic.StoreInt64(&r.index, v)
-  }
-  return v
+  return atomic.AddInt64(&r.index, 1)
 }
 
 // Obtain any backend. Panics if there are none.
@@ -120,8 +115,9 @@ func (r *Route) Backend(n int64) Backend {
   if len(r.Backends) == 1 {
     return r.Backends[0]
   }else{
-    if n < 0 { n = 0 }
-    return r.Backends[int(n) % len(r.Backends)]
+    x := int(n) % len(r.Backends)
+    if x < 0 { x = -x }
+    return r.Backends[x]
   }
 }
 
