@@ -21,7 +21,6 @@ import (
 
 const (
   paramTLS  = "tls"
-  paramHTTP = "http"
 )
 
 var (
@@ -136,7 +135,7 @@ func (s *Service) Run() error {
           continue
         }else{
           proxyConnRate.Mark(1)
-          go s.handle(r, conn.(*net.TCPConn))
+          go s.handle(r, conn)
         }
       }
     }(r, e)
@@ -146,7 +145,7 @@ func (s *Service) Run() error {
 }
 
 // Handle a request for a particular route
-func (s *Service) handle(r *route.Route, c *net.TCPConn) {
+func (s *Service) handle(r *route.Route, c net.Conn) {
   var p net.Conn
   var err error
   
